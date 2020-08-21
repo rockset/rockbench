@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -23,38 +20,38 @@ var (
 )
 
 func main() {
-	apiKey, _ := os.LookupEnv("TEST_API_KEY")
-	apiServer, _ := os.LookupEnv("TEST_API_SERVER")
-	qpsStr, _ := os.LookupEnv("TEST_WPS")
-	collection, _ := os.LookupEnv("TEST_COLLECTION")
-
-	wps, err := strconv.Atoi(qpsStr)
-	if err != nil {
-		log.Fatal("Invalid wps", qpsStr)
-	}
-	batch, found := os.LookupEnv("TEST_BATCH")
-	if !found {
-		log.Fatal("Must specify TEST_BATCH env var")
-	}
+	apiKey := mustGetEnvString("ROCKSET_API_KEY")
+	apiServer := getEnvDefault("ROCKSET_API_SERVER", "https://api.rs2.usw2.rockset.com")
+	wps := mustGetEnvInt("WPS")
+	collection := mustGetEnvString("ROCKSET_COLLECTION")
+	batchSize := mustGetEnvInt("BATCH_SIZE")
 
 	defaultRoundTripper := http.DefaultTransport
 	defaultTransportPointer, ok := defaultRoundTripper.(*http.Transport)
 	if !ok {
 		panic(fmt.Sprintf("defaultRoundTripper not an *http.Transport"))
 	}
-	defaultTransport := *defaultTransportPointer
+	defaultTransport := defaultTransportPointer
 	defaultTransport.MaxIdleConns = 100
 	defaultTransport.MaxIdleConnsPerHost = 100
-	client := &http.Client{Transport: &defaultTransport}
+	client := &http.Client{Transport: defaultTransport}
 
-	// Delete collection on cleanup.
+	// TODO: Add more types of destination
+	var d Destination
+	d = &Rockset{
+		apiKey:              apiKey,
+		apiServer:           apiServer,
+		collection:          collection,
+		client:              client,
+		generatorIdentifier: generatorIdentifier,
+	}
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGKILL)
 	exitChan := make(chan int)
 
 	var done = false
 	go func() {
-		// Delete the collection once receiving signal from k8s to stop this pod.
 		for {
 			s := <-signalChan
 			switch s {
@@ -73,21 +70,24 @@ func main() {
 	generatorIdentifier = generateRandomString(10)
 	fmt.Println("Generator identifier: ", generatorIdentifier)
 
-	url := fmt.Sprintf("%s/v1/orgs/self/ws/commons/collections/%s/docs", apiServer, collection)
-
 	// Periodically read number of docs and log to output
 	go func() {
 		for {
 			if done {
 				break
 			}
-			getLatencyRockset(client, collection, apiServer, apiKey)
+			now := time.Now()
+			latestTimestamp, err := d.GetLatestTimestamp()
+			latency := now.Sub(latestTimestamp)
+
+			if err == nil {
+				fmt.Printf("Latency: %s", latency)
+			}
 
 			time.Sleep(30 * time.Second)
 		}
 	}()
 
-	batchSize, _ := strconv.Atoi(batch)
 	// Write function
 	for {
 		if done {
@@ -97,7 +97,7 @@ func main() {
 		iterationStart := time.Now()
 		for i := 0; i < wps; i++ {
 			docs := generateDocs(batchSize)
-			go sendDocuments(client, url, apiKey, docs)
+			go d.SendDocument(docs)
 		}
 		elapsed := time.Now().Sub(iterationStart)
 		if elapsed > time.Second {
@@ -199,81 +199,6 @@ func generateDocs(batchSize int) []interface{} {
 	return docs
 }
 
-func sendDocuments(client *http.Client, url string, apiKey string, docs []interface{}) {
-	body := map[string][]interface{}{"data": docs}
-	jsonBody, _ := json.Marshal(body)
-	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	req.Header.Add("Authorization", fmt.Sprintf("ApiKey %s", apiKey))
-	req.Header.Add("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("Error during request!", err)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusOK {
-		_, _ = io.Copy(ioutil.Discard, resp.Body)
-	} else {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if err == nil {
-			bodyString := string(bodyBytes)
-			fmt.Printf("Error code: %d, body: %s \n", resp.StatusCode, bodyString)
-		}
-	}
-}
-
-func getLatencyRockset(client *http.Client, collection string, apiServer string, apiKey string) {
-	url := fmt.Sprintf("%s/v1/orgs/self/queries", apiServer)
-	query := fmt.Sprintf("select UNIX_MICROS(_event_time) from %s where generator_identifier = '%s' ORDER BY _event_time DESC limit 1", collection, generatorIdentifier)
-	body := map[string]interface{}{"sql": map[string]interface{}{"query": query}}
-	jsonBody, _ := json.Marshal(body)
-	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	req.Header.Add("Authorization", fmt.Sprintf("ApiKey %s", apiKey))
-	req.Header.Add("Content-Type", "application/json")
-
-	now := getCurrentTimeMicros()
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("Error during request!\n", err)
-		return
-	}
-
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if err == nil {
-			bodyString := string(bodyBytes)
-			fmt.Printf("Error code: %d, body: %s \n", resp.StatusCode, bodyString)
-		}
-		return
-	} else {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		var result map[string]interface{}
-		json.Unmarshal(bodyBytes, &result)
-		// Below is pretty sad :(
-		x := result["results"].([]interface{})
-		if len(x) == 0 {
-			return
-		}
-
-		x0 := x[0]
-		y := x0.(map[string]interface{})
-		yc := y["?UNIX_MICROS"]
-		if yc == nil {
-			return
-		}
-
-		latency := float64(now) - yc.(float64)
-		if latency < 0 {
-			// use query elapsed time as e2e latency
-			end := getCurrentTimeMicros()
-			latency = float64(end) - float64(now)
-		}
-		fmt.Printf("latency: %f\n", latency)
-		return
-	}
-}
-
 func generateRandomString(n int) string {
 	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
@@ -282,4 +207,32 @@ func generateRandomString(n int) string {
 		s[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(s)
+}
+
+func getEnvDefault(env string, defaultValue string) string {
+	v, found := os.LookupEnv(env)
+	if !found {
+		return defaultValue
+	}
+	return v
+}
+
+func mustGetEnvString(env string) string {
+	v, found := os.LookupEnv(env)
+	if !found {
+		log.Fatalf("env %s must be set!", env)
+	}
+	return v
+}
+
+func mustGetEnvInt(env string) int {
+	v, found := os.LookupEnv(env)
+	if !found {
+		log.Fatalf("env %s must be set!", env)
+	}
+	ret, err := strconv.Atoi(v)
+	if err != nil {
+		log.Fatalf("env %s is not integer!", env)
+	}
+	return ret
 }
