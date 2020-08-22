@@ -25,6 +25,7 @@ func main() {
 	wps := mustGetEnvInt("WPS")
 	collection := mustGetEnvString("ROCKSET_COLLECTION")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
+	destination := mustGetEnvString("DESTINATION")
 
 	defaultRoundTripper := http.DefaultTransport
 	defaultTransportPointer, ok := defaultRoundTripper.(*http.Transport)
@@ -38,12 +39,17 @@ func main() {
 
 	// TODO: Add more types of destination
 	var d Destination
-	d = &Rockset{
-		apiKey:              apiKey,
-		apiServer:           apiServer,
-		collection:          collection,
-		client:              client,
-		generatorIdentifier: generatorIdentifier,
+
+	if destination == "Rockset" {
+		d = &Rockset{
+			apiKey:              apiKey,
+			apiServer:           apiServer,
+			collection:          collection,
+			client:              client,
+			generatorIdentifier: generatorIdentifier,
+		}
+	} else {
+		log.Fatal("Unsupported destination. Only supported one is Rockset.")
 	}
 
 	signalChan := make(chan os.Signal, 1)
