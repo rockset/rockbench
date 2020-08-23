@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bxcodec/faker/v3"
+	guuid "github.com/google/uuid"
 )
 
 var (
@@ -20,10 +21,7 @@ var (
 )
 
 func main() {
-	apiKey := mustGetEnvString("ROCKSET_API_KEY")
-	apiServer := getEnvDefault("ROCKSET_API_SERVER", "https://api.rs2.usw2.rockset.com")
 	wps := mustGetEnvInt("WPS")
-	collection := mustGetEnvString("ROCKSET_COLLECTION")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := mustGetEnvString("DESTINATION")
 
@@ -37,14 +35,32 @@ func main() {
 	defaultTransport.MaxIdleConnsPerHost = 100
 	client := &http.Client{Transport: defaultTransport}
 
-	// TODO: Add more types of destination
+	generatorIdentifier = generateRandomString(10)
+	fmt.Println("Generator identifier: ", generatorIdentifier)
+
 	var d Destination
 
 	if destination == "Rockset" {
+		apiKey := mustGetEnvString("ROCKSET_API_KEY")
+		apiServer := getEnvDefault("ROCKSET_API_SERVER", "https://api.rs2.usw2.rockset.com")
+		collection := mustGetEnvString("ROCKSET_COLLECTION")
+
 		d = &Rockset{
 			apiKey:              apiKey,
 			apiServer:           apiServer,
 			collection:          collection,
+			client:              client,
+			generatorIdentifier: generatorIdentifier,
+		}
+	} else if destination == "Elastic" {
+		esAuth := mustGetEnvString("ELASTIC_AUTH"i)
+		esURL := mustGetEnvString("ELASTIC_URL")
+		esIndexName := mustGetEnvString("ELASTIC_INDEX")
+
+		d = &Elastic{
+			esAuth:              esAuth
+			esURL:           	 esURL,
+			esIndexName:         esIndexName
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}
@@ -73,9 +89,6 @@ func main() {
 		}
 	}()
 
-	generatorIdentifier = generateRandomString(10)
-	fmt.Println("Generator identifier: ", generatorIdentifier)
-
 	// Periodically read number of docs and log to output
 	go func() {
 		for {
@@ -102,7 +115,7 @@ func main() {
 
 		iterationStart := time.Now()
 		for i := 0; i < wps; i++ {
-			docs := generateDocs(batchSize)
+			docs := generateDocs(batchSize, destination)
 			go d.SendDocument(docs)
 		}
 		elapsed := time.Now().Sub(iterationStart)
@@ -170,7 +183,7 @@ type FriendDetailsStruct struct {
 	Age  int `faker:"oneof: 15, 27, 61"`
 }
 
-func generateDoc() interface{} {
+func generateDoc(destination string) interface{} {
 	docStruct := DocStruct{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
@@ -183,7 +196,10 @@ func generateDoc() interface{} {
 
 	json.Unmarshal(j, &doc)
 
-	doc["_id"] = strconv.Itoa(rand.Intn(2000000000))
+	if destination == "Rockset" {
+		doc["_id"] = guuid.New().String()
+	}
+
 	doc["_event_time"] = getCurrentTimeMicros()
 	doc["generator_identifier"] = generatorIdentifier
 
@@ -195,11 +211,11 @@ func getCurrentTimeMicros() int64 {
 	return int64(time.Nanosecond) * t.UnixNano() / int64(time.Microsecond)
 }
 
-func generateDocs(batchSize int) []interface{} {
+func generateDocs(batchSize int, destination string) []interface{} {
 	var docs []interface{}
 
 	for i := 0; i < batchSize; i++ {
-		docs = append(docs, generateDoc())
+		docs = append(docs, generateDoc(destination))
 	}
 
 	return docs
