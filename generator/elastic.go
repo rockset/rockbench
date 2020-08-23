@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -81,7 +80,6 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	req.Header.Add("Authorization", e.esAuth)
 	req.Header.Add("Content-Type", "application/json")
 
-	now := time.Now().Unix() * 1000000
 	resp, err := e.client.Do(req)
 	if err != nil {
 		fmt.Println("Error during request!\n", err)
@@ -118,7 +116,7 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 		return time.Now(), errors.New("Malformed result")
 	}
 
-	timeMicro := result["value"].(float64)
+	timeMicro := int64(result["value"].(float64))
 
 	// Convert from microseconds to (secs, nanosecs)
 	return time.Unix(timeMicro/1000000, (timeMicro%1000000)*1000), nil

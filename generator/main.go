@@ -53,14 +53,14 @@ func main() {
 			generatorIdentifier: generatorIdentifier,
 		}
 	} else if destination == "Elastic" {
-		esAuth := mustGetEnvString("ELASTIC_AUTH"i)
+		esAuth := mustGetEnvString("ELASTIC_AUTH")
 		esURL := mustGetEnvString("ELASTIC_URL")
 		esIndexName := mustGetEnvString("ELASTIC_INDEX")
 
 		d = &Elastic{
-			esAuth:              esAuth
-			esURL:           	 esURL,
-			esIndexName:         esIndexName
+			esAuth:              esAuth,
+			esURL:               esURL,
+			esIndexName:         esIndexName,
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}
