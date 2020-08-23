@@ -54,7 +54,7 @@ func (e *Elastic) SendDocument(docs []interface{}) error {
 	elasticHTTPRequest.Header.Add("Authorization", e.esAuth)
 	elasticHTTPRequest.Header.Add("Content-Type", "application/x-ndjson")
 	
-	resp, err := httpClient.Do(elasticHTTPRequest)
+	resp, err := e.client.Do(elasticHTTPRequest)
 	if err != nil {
 		fmt.Println("Error during request!", err)
 		return err
@@ -82,7 +82,7 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	req.Header.Add("Content-Type", "application/json")
 
 	now := time.Now().Unix() * 1000000
-	resp, err := client.Do(req)
+	resp, err := e.client.Do(req)
 	if err != nil {
 		fmt.Println("Error during request!\n", err)
 		return time.Now(), err
