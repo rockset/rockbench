@@ -73,7 +73,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 		return time.Now(), err
 	}
 
-	// Receive status 200. Result structure will look something like
+	// Received status 200. Result structure will look something like
 	// {
 	// 	"results" : {
 	// 		"?UNIX_MICROS": 1000000
