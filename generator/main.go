@@ -14,11 +14,35 @@ import (
 
 	"github.com/bxcodec/faker/v3"
 	guuid "github.com/google/uuid"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var (
 	generatorIdentifier string
+
+	// More info can found here: https://godoc.org/github.com/prometheus/client_golang/prometheus#NewSummary
+	objectiveMap = map[float64]float64{0.5: 0.05, 0.95: 0.005}
+
+	writesCompleted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "writes_completed",
+		Help: "The total number of writes completed",
+	})
+
+	writesErrored = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "writes_errored",
+		Help: "The total number of writes errored",
+	})
 )
+
+func recordWritesCompleted(count float64) {
+	writesCompleted.Add(count)
+}
+
+func recordWritesErrored(count float64) {
+	writesErrored.Add(count)
+}
 
 func main() {
 	wps := mustGetEnvInt("WPS")
@@ -101,6 +125,7 @@ func main() {
 
 			if err == nil {
 				fmt.Printf("Latency: %s", latency)
+				d.RecordE2ELatency(float64(latency.Microseconds()))
 			}
 
 			time.Sleep(30 * time.Second)

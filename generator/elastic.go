@@ -8,11 +8,29 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pkg/errors"
 	guuid "github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// contains all configurations needed to send documents to Elastic
+var (
+	e2eLatenciesElastic = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "e2e_latencies_es",
+		Help: "The e2e latency between client and Elastic",
+	})
+	e2eLatenciesElasticSummary = promauto.NewSummary(prometheus.SummaryOpts{
+		Name:       "e2e_latencies_es_metric",
+		Help:       "e2e latency in micro-seconds to Elastic",
+		Objectives: objectiveMap,
+	})
+	numEventIngestedElastic = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "num_events_ingested_elastic",
+		Help: "Number of events ingested to Elastic",
+	})
+)
+
+// Elastic contains all configurations needed to send documents to Elastic
 type Elastic struct {
 	esAuth              string
 	esURL               string
@@ -23,13 +41,15 @@ type Elastic struct {
 
 // SendDocument sends a batch of documents to Rockset
 func (e *Elastic) SendDocument(docs []interface{}) error {
+	numDocs := len(docs)
+	numEventIngestedElastic.Add(float64(numDocs))
 	var builder bytes.Buffer
 	for i := 0; i < len(docs); i++ {
 		line, err := json.Marshal(docs[i])
 		if err != nil {
 			return err
 		}
-		
+
 		index := make(map[string]interface{})
 		index["_index"] = e.esIndexName
 		index["_id"] = guuid.New().String()
@@ -52,20 +72,24 @@ func (e *Elastic) SendDocument(docs []interface{}) error {
 	elasticHTTPRequest, _ := http.NewRequest(http.MethodPost, bulkURL, bytes.NewBuffer(body))
 	elasticHTTPRequest.Header.Add("Authorization", e.esAuth)
 	elasticHTTPRequest.Header.Add("Content-Type", "application/x-ndjson")
-	
+
 	resp, err := e.client.Do(elasticHTTPRequest)
 	if err != nil {
+		recordWritesErrored(float64(numDocs))
 		fmt.Println("Error during request!", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		recordWritesErrored(float64(numDocs))
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err == nil {
 			bodyString := string(bodyBytes)
 			return errors.Errorf("Error code: %d, body: %s \n", resp.StatusCode, bodyString)
 		}
+	} else {
+		recordWritesCompleted(float64(numDocs))
 	}
 	return nil
 }
@@ -120,4 +144,9 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 
 	// Convert from microseconds to (secs, nanosecs)
 	return time.Unix(timeMicro/1000000, (timeMicro%1000000)*1000), nil
+}
+
+func (e *Elastic) RecordE2ELatency(latency float64) {
+	e2eLatenciesElastic.Set(latency)
+	e2eLatenciesElasticSummary.Observe(latency)
 }

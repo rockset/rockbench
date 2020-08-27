@@ -11,4 +11,7 @@ type Destination interface {
 
 	// Get latest timestamp seen in the destination.
 	GetLatestTimestamp() (time.Time, error)
+
+	// Record the e2e latency metrics.
+	RecordE2ELatency(latency float64)
 }
