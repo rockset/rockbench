@@ -10,25 +10,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-)
-
-var (
-	e2eLatenciesRockset = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "e2e_latencies_rockset",
-		Help: "The e2e latency between client and Rockset",
-	})
-
-	e2eRocksetLatenciesSummary = promauto.NewSummary(prometheus.SummaryOpts{
-		Name:       "e2e_latencies_rockset_metric",
-		Help:       "e2e latency in micro-seconds to Rockset",
-		Objectives: objectiveMap,
-	})
-	numEventIngestedRockset = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "num_events_ingested_rockset",
-		Help: "Number of events ingested to Rockset",
-	})
 )
 
 // Rockset contains all configurations needed to send documents to Rockset
@@ -43,7 +24,7 @@ type Rockset struct {
 // SendDocument sends a batch of documents to Rockset
 func (r *Rockset) SendDocument(docs []interface{}) error {
 	numDocs := len(docs)
-	numEventIngestedRockset.Add(float64(numDocs))
+	numEventIngested.Add(float64(numDocs))
 
 	URL := fmt.Sprintf("%s/v1/orgs/self/ws/commons/collections/%s/docs", r.apiServer, r.collection)
 	body := map[string][]interface{}{"data": docs}
@@ -122,9 +103,4 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 
 	// Convert from microseconds to (secs, nanosecs)
 	return time.Unix(timeMicro/1000000, (timeMicro%1000000)*1000), nil
-}
-
-func (r *Rockset) RecordE2ELatency(latency float64) {
-	e2eLatenciesRockset.Set(latency)
-	e2eRocksetLatenciesSummary.Observe(latency)
 }
