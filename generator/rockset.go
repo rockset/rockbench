@@ -23,6 +23,9 @@ type Rockset struct {
 
 // SendDocument sends a batch of documents to Rockset
 func (r *Rockset) SendDocument(docs []interface{}) error {
+	numDocs := len(docs)
+	numEventIngested.Add(float64(numDocs))
+
 	URL := fmt.Sprintf("%s/v1/orgs/self/ws/commons/collections/%s/docs", r.apiServer, r.collection)
 	body := map[string][]interface{}{"data": docs}
 	jsonBody, _ := json.Marshal(body)
@@ -31,13 +34,16 @@ func (r *Rockset) SendDocument(docs []interface{}) error {
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := r.client.Do(req)
 	if err != nil {
+		recordWritesErrored(float64(numDocs))
 		fmt.Println("Error during request!", err)
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
+		recordWritesCompleted(float64(numDocs))
 		_, _ = io.Copy(ioutil.Discard, resp.Body)
 	} else {
+		recordWritesErrored(float64(numDocs))
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err == nil {
 			bodyString := string(bodyBytes)

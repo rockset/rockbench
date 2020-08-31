@@ -14,11 +14,55 @@ import (
 
 	"github.com/bxcodec/faker/v3"
 	guuid "github.com/google/uuid"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
 	generatorIdentifier string
+
+	// More info can found here: https://godoc.org/github.com/prometheus/client_golang/prometheus#NewSummary
+	objectiveMap = map[float64]float64{0.5: 0.05, 0.95: 0.005}
+
+	writesCompleted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "writes_completed",
+		Help: "The total number of writes completed",
+	})
+
+	writesErrored = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "writes_errored",
+		Help: "The total number of writes errored",
+	})
+
+	e2eLatencies = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "e2e_latencies",
+		Help: "The e2e latency between client and the Destination",
+	})
+	e2eLatenciesSummary = promauto.NewSummary(prometheus.SummaryOpts{
+		Name:       "e2e_latencies_metric",
+		Help:       "e2e latency in micro-seconds between client and the Destination",
+		Objectives: objectiveMap,
+	})
+	numEventIngested = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "num_events_ingested",
+		Help: "Number of events ingested to the Destination",
+	})
 )
+
+func recordE2ELatency(latency float64) {
+	e2eLatencies.Set(latency)
+	e2eLatenciesSummary.Observe(latency)
+}
+
+func recordWritesCompleted(count float64) {
+	writesCompleted.Add(count)
+}
+
+func recordWritesErrored(count float64) {
+	writesErrored.Add(count)
+}
 
 func main() {
 	wps := mustGetEnvInt("WPS")
@@ -68,6 +112,8 @@ func main() {
 		log.Fatal("Unsupported destination. Only supported one is Rockset.")
 	}
 
+	startMetricListener()
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGKILL)
 	exitChan := make(chan int)
@@ -101,6 +147,7 @@ func main() {
 
 			if err == nil {
 				fmt.Printf("Latency: %s", latency)
+				recordE2ELatency(float64(latency.Microseconds()))
 			}
 
 			time.Sleep(30 * time.Second)
@@ -257,4 +304,12 @@ func mustGetEnvInt(env string) int {
 		log.Fatalf("env %s is not integer!", env)
 	}
 	return ret
+}
+
+// launch it asynchronously, as ListenAndServe is a blocking call
+func startMetricListener() {
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(":9161", nil)
+	}()
 }
