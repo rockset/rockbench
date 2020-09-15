@@ -1,5 +1,5 @@
 # rockbench
-Benchmark used to measure ingest throughput to various different sources.
+Benchmark used to measure ingest throughput of a realtime database.
 
 ## Manual
 You can run this directly, or through Docker container.
