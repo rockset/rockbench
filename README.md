@@ -39,4 +39,4 @@ Implement the [Destination](https://github.com/rockset/rockbench/blob/master/gen
 * `SendDocument`: Method to send batch of documents to the destination
 * `GetLatestTimestamp`: Fetch the latest timestamp from the database
 
-Once the new source is implemented, handle it in [main.go](https://github.com/rockset/rockbench/blob/master/generator/main.go]).
+Once the new source is implemented, handle it in [main.go](https://github.com/rockset/rockbench/blob/master/generator/main.go).
