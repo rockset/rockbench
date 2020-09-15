@@ -19,11 +19,11 @@ cd rockbench/generator
 # Build
 go build
 
-# Send to Rockset
-ROCKSET_API_KEY=xxxx ROCKSET_COLLECTION=yyyy WPS=1 BATCH_SIZE=1 DESTINATION=Rockset ./generator
+# Send data to Rockset and report data latency
+ROCKSET_API_KEY=xxxx ROCKSET_COLLECTION=yyyy WPS=1 BATCH_SIZE=50 DESTINATION=Rockset ./generator
 
-# Send to Elastic
-ELASTIC_AUTH=xxxx ELASTIC_URL=https://... ELASTIC_INDEX=index_name WPS=1 BATCH_SIZE=1 DESTINATION=Elastic ./generator
+# Send data to ElasticSearch and report data latency
+ELASTIC_AUTH=xxxx ELASTIC_URL=https://... ELASTIC_INDEX=index_name WPS=1 BATCH_SIZE=50 DESTINATION=Elastic ./generator
 ```
 
 * To run with Docker container
