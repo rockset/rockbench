@@ -1,4 +1,4 @@
-# rockbench
+# RockBench
 Benchmark used to measure ingest throughput of a realtime database.
 
 ## Manual
