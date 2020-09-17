@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bxcodec/faker/v3"
@@ -84,7 +85,8 @@ func main() {
 
 	var d Destination
 
-	if destination == "Rockset" {
+	switch strings.ToLower(destination) {
+	case "rockset":
 		apiKey := mustGetEnvString("ROCKSET_API_KEY")
 		apiServer := getEnvDefault("ROCKSET_API_SERVER", "https://api.rs2.usw2.rockset.com")
 		collection := mustGetEnvString("ROCKSET_COLLECTION")
@@ -96,7 +98,7 @@ func main() {
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}
-	} else if destination == "Elastic" {
+	case "elastic":
 		esAuth := mustGetEnvString("ELASTIC_AUTH")
 		esURL := mustGetEnvString("ELASTIC_URL")
 		esIndexName := mustGetEnvString("ELASTIC_INDEX")
@@ -108,10 +110,10 @@ func main() {
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}
-	} else if destination == "null" {
+	case "null":
 		d = &Null{}
-	} else {
-		log.Fatal("Unsupported destination. Only supported one is Rockset.")
+	default:
+		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
 	}
 
 	go metricListener()
@@ -125,7 +127,7 @@ func main() {
 
 	// Periodically read number of docs and log to output
 	go func() {
-		t := time.NewTicker(3 * time.Second)
+		t := time.NewTicker(30 * time.Second)
 		defer t.Stop()
 
 		for {
@@ -158,6 +160,7 @@ func main() {
 			os.Exit(0)
 		case <-t.C:
 			for i := 0; i < wps; i++ {
+				// TODO: move doc generation out of this loop into a go routine that pre-generates them
 				docs, err := generateDocs(batchSize, destination)
 				if err != nil {
 					log.Printf("document generation failed: %v", err)
@@ -317,7 +320,7 @@ func metricListener() {
 	}
 }
 
-func deferedErrorCloser(c io.Closer) {
+func deferredErrorCloser(c io.Closer) {
 	if err := c.Close(); err != nil {
 		log.Printf("failed to close body: %v", err)
 	}

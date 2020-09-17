@@ -36,7 +36,7 @@ func (r *Rockset) SendDocument(docs []interface{}) error {
 		fmt.Println("Error during request!", err)
 		return err
 	}
-	defer deferedErrorCloser(resp.Body)
+	defer deferredErrorCloser(resp.Body)
 
 	if resp.StatusCode == http.StatusOK {
 		recordWritesCompleted(float64(numDocs))
@@ -75,7 +75,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 		return time.Time{}, fmt.Errorf("failed to execute request: %w", err)
 	}
 
-	defer deferedErrorCloser(resp.Body)
+	defer deferredErrorCloser(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err == nil {

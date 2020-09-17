@@ -59,7 +59,7 @@ func (e *Elastic) SendDocument(docs []interface{}) error {
 		recordWritesErrored(float64(numDocs))
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer deferedErrorCloser(resp.Body)
+	defer deferredErrorCloser(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		recordWritesErrored(float64(numDocs))
@@ -90,7 +90,7 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to perform request: %w", err)
 	}
-	defer deferedErrorCloser(resp.Body)
+	defer deferredErrorCloser(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
