@@ -3,13 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
 
 	guuid "github.com/google/uuid"
-	"github.com/pkg/errors"
 )
 
 // Elastic contains all configurations needed to send documents to Elastic
@@ -29,7 +29,7 @@ func (e *Elastic) SendDocument(docs []interface{}) error {
 	for i := 0; i < len(docs); i++ {
 		line, err := json.Marshal(docs[i])
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to marshal document: %w", err)
 		}
 
 		index := make(map[string]interface{})
@@ -39,8 +39,7 @@ func (e *Elastic) SendDocument(docs []interface{}) error {
 		ret["index"] = index
 		metaLine, err := json.Marshal(ret)
 		if err != nil {
-			fmt.Println("Error preparing request", err)
-			return err
+			return fmt.Errorf("failed to marshal request: %w", err)
 		}
 
 		builder.Write(metaLine)
@@ -58,21 +57,19 @@ func (e *Elastic) SendDocument(docs []interface{}) error {
 	resp, err := e.client.Do(elasticHTTPRequest)
 	if err != nil {
 		recordWritesErrored(float64(numDocs))
-		fmt.Println("Error during request!", err)
-		return err
+		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer deferredErrorCloser(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		recordWritesErrored(float64(numDocs))
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if err == nil {
-			bodyString := string(bodyBytes)
-			return errors.Errorf("Error code: %d, body: %s \n", resp.StatusCode, bodyString)
+		if err != nil {
+			return fmt.Errorf("failed to read response body: %w", err)
 		}
-	} else {
-		recordWritesCompleted(float64(numDocs))
+		return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
+	recordWritesCompleted(float64(numDocs))
 	return nil
 }
 
@@ -81,25 +78,26 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	searchURL := fmt.Sprintf("%s/%s/_search?size=0", e.esURL, e.esIndexName)
 
 	jsonBody := fmt.Sprintf("{\"aggs\":{\"max_event_time_for_identifier\":{\"filter\":{\"term\":{\"generator_identifier\":\"%s\"}},\"aggs\":{\"max_event_time\":{\"max\":{\"field\":\"_event_time\"}}}}}}", e.generatorIdentifier)
-	req, _ := http.NewRequest(http.MethodPost, searchURL, bytes.NewBufferString(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, searchURL, bytes.NewBufferString(jsonBody))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to create new request: %w", err)
+	}
 
 	req.Header.Add("Authorization", e.esAuth)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := e.client.Do(req)
 	if err != nil {
-		fmt.Println("Error during request!\n", err)
-		return time.Now(), err
+		return time.Time{}, fmt.Errorf("failed to perform request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer deferredErrorCloser(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if err == nil {
-			bodyString := string(bodyBytes)
-			fmt.Printf("Error code: %d, body: %s \n", resp.StatusCode, bodyString)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("failed to read %s response body: %w", resp.Status, err)
 		}
-		return time.Now(), err
+		return time.Time{}, fmt.Errorf("request failed: expected OK got %s: %s", resp.Status, string(bodyBytes))
 	}
 
 	// Received status 200. Result structure will look something like
@@ -112,18 +110,26 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	//      }
 	// 	}
 	// }
-	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var result map[string]interface{}
-	json.Unmarshal(bodyBytes, &result)
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return time.Time{}, fmt.Errorf("failed to unmarshal reponse: %w", err)
+	}
+
+	// TODO: check type assertions
 	result = result["aggregations"].(map[string]interface{})
 	result = result["max_event_time_for_identifier"].(map[string]interface{})
 	result = result["max_event_time"].(map[string]interface{})
 	if result["value"] == nil {
-		return time.Now(), errors.New("Malformed result")
+		return time.Time{}, errors.New("malformed result, value is nil")
 	}
 
 	timeMicro := int64(result["value"].(float64))
 
 	// Convert from microseconds to (secs, nanosecs)
-	return time.Unix(timeMicro/1000000, (timeMicro%1000000)*1000), nil
+	return time.Unix(timeMicro/1_000_000, (timeMicro%1_000_000)*1_000), nil
 }

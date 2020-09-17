@@ -3,13 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
-	"syscall"
+	"strings"
 	"time"
 
 	"github.com/bxcodec/faker/v3"
@@ -84,7 +85,8 @@ func main() {
 
 	var d Destination
 
-	if destination == "Rockset" {
+	switch strings.ToLower(destination) {
+	case "rockset":
 		apiKey := mustGetEnvString("ROCKSET_API_KEY")
 		apiServer := getEnvDefault("ROCKSET_API_SERVER", "https://api.rs2.usw2.rockset.com")
 		collection := mustGetEnvString("ROCKSET_COLLECTION")
@@ -96,7 +98,7 @@ func main() {
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}
-	} else if destination == "Elastic" {
+	case "elastic":
 		esAuth := mustGetEnvString("ELASTIC_AUTH")
 		esURL := mustGetEnvString("ELASTIC_URL")
 		esIndexName := mustGetEnvString("ELASTIC_INDEX")
@@ -108,73 +110,71 @@ func main() {
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}
-	} else {
-		log.Fatal("Unsupported destination. Only supported one is Rockset.")
+	case "null":
+		d = &Null{}
+	default:
+		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
 	}
 
-	startMetricListener()
+	go metricListener()
 
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGKILL)
-	exitChan := make(chan int)
+	signal.Notify(signalChan, os.Kill, os.Interrupt)
 
-	var done = false
-	go func() {
-		for {
-			s := <-signalChan
-			switch s {
-			case syscall.SIGTERM:
-				fmt.Printf("Receive SIGTERM\n")
-				done = true
-				exitChan <- 0
-			case syscall.SIGKILL:
-				fmt.Printf("Receive SIGKILL\n")
-				done = true
-				exitChan <- 0
-			}
-		}
-	}()
+	var doneChan = make(chan struct{}, 1)
+
+	go signalHandler(signalChan, doneChan)
 
 	// Periodically read number of docs and log to output
 	go func() {
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+
 		for {
-			if done {
-				break
-			}
-			now := time.Now()
-			latestTimestamp, err := d.GetLatestTimestamp()
-			latency := now.Sub(latestTimestamp)
+			select {
+			case <-doneChan:
+				return
+			case <-t.C:
+				now := time.Now()
+				latestTimestamp, err := d.GetLatestTimestamp()
+				latency := now.Sub(latestTimestamp)
 
-			if err == nil {
-				fmt.Printf("Latency: %s", latency)
-				recordE2ELatency(float64(latency.Microseconds()))
+				if err == nil {
+					fmt.Printf("Latency: %s\n", latency)
+					recordE2ELatency(float64(latency.Microseconds()))
+				} else {
+					log.Printf("failed to get latest timespamp: %v", err)
+				}
 			}
-
-			time.Sleep(30 * time.Second)
 		}
 	}()
 
 	// Write function
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
 	for {
-		if done {
-			break
+		select {
+		// when doneChan is closed, receive immediately returns the zero value
+		case <-doneChan:
+			log.Printf("done")
+			os.Exit(0)
+		case <-t.C:
+			for i := 0; i < wps; i++ {
+				// TODO: move doc generation out of this loop into a go routine that pre-generates them
+				docs, err := generateDocs(batchSize, destination)
+				if err != nil {
+					log.Printf("document generation failed: %v", err)
+					os.Exit(1)
+				}
+				go func(i int) {
+					if err := d.SendDocument(docs); err != nil {
+						log.Printf("failed to send document %d of %d: %v", i, wps, err)
+					}
+				}(i)
+			}
+			// TODO: this does not guarantee that the writes have finished
 		}
-
-		iterationStart := time.Now()
-		for i := 0; i < wps; i++ {
-			docs := generateDocs(batchSize, destination)
-			go d.SendDocument(docs)
-		}
-		elapsed := time.Now().Sub(iterationStart)
-		if elapsed > time.Second {
-			fmt.Printf("Iteration time %s > 1s, invalid results!!!", elapsed)
-		}
-		sleepTime := time.Second - elapsed
-		time.Sleep(sleepTime)
 	}
-
-	code := <-exitChan
-	os.Exit(code)
 }
 
 type DocStruct struct {
@@ -230,18 +230,19 @@ type FriendDetailsStruct struct {
 	Age  int `faker:"oneof: 15, 27, 61"`
 }
 
-func generateDoc(destination string) interface{} {
+func generateDoc(destination string) (interface{}, error) {
 	docStruct := DocStruct{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to generate fake document: %w", err)
 	}
 
 	doc := make(map[string]interface{})
 	j, _ := json.Marshal(docStruct)
 
-	json.Unmarshal(j, &doc)
+	if err = json.Unmarshal(j, &doc); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
+	}
 
 	if destination == "Rockset" {
 		doc["_id"] = guuid.New().String()
@@ -250,7 +251,7 @@ func generateDoc(destination string) interface{} {
 	doc["_event_time"] = getCurrentTimeMicros()
 	doc["generator_identifier"] = generatorIdentifier
 
-	return doc
+	return doc, nil
 }
 
 func getCurrentTimeMicros() int64 {
@@ -258,14 +259,18 @@ func getCurrentTimeMicros() int64 {
 	return int64(time.Nanosecond) * t.UnixNano() / int64(time.Microsecond)
 }
 
-func generateDocs(batchSize int, destination string) []interface{} {
-	var docs []interface{}
+func generateDocs(batchSize int, destination string) ([]interface{}, error) {
+	var docs = make([]interface{}, batchSize, batchSize)
 
 	for i := 0; i < batchSize; i++ {
-		docs = append(docs, generateDoc(destination))
+		doc, err := generateDoc(destination)
+		if err != nil {
+			return nil, err
+		}
+		docs[i] = doc
 	}
 
-	return docs
+	return docs, nil
 }
 
 func generateRandomString(n int) string {
@@ -306,10 +311,31 @@ func mustGetEnvInt(env string) int {
 	return ret
 }
 
-// launch it asynchronously, as ListenAndServe is a blocking call
-func startMetricListener() {
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(":9161", nil)
-	}()
+// metricListener needs to be launched asynchronously, as ListenAndServe is a blocking call
+func metricListener() {
+	http.Handle("/metrics", promhttp.Handler())
+	err := http.ListenAndServe(":9161", nil)
+	if err != nil && err != http.ErrServerClosed {
+		log.Fatalf("failed to start metrics listener: %v", err)
+	}
+}
+
+func deferredErrorCloser(c io.Closer) {
+	if err := c.Close(); err != nil {
+		log.Printf("failed to close body: %v", err)
+	}
+}
+
+func signalHandler(signalChan chan os.Signal, doneChan chan struct{}) {
+	done := false
+	for {
+		s := <-signalChan
+		if done {
+			fmt.Printf("\nsecond signal received (%s), exiting\n", s)
+			os.Exit(1)
+		}
+		fmt.Printf("\nsignal received: %s\n", s)
+		done = true
+		close(doneChan)
+	}
 }
