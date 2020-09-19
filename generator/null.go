@@ -11,5 +11,5 @@ func (n *Null) SendDocument(docs []interface{}) error {
 }
 
 func (n *Null) GetLatestTimestamp() (time.Time, error) {
-	return time.Now().Add(-10*time.Millisecond), nil
+	return time.Now().Add(-10 * time.Millisecond), nil
 }

@@ -87,9 +87,9 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 
 	// Received status 200. Result structure will look something like
 	// {
-	// 	"results" : {
+	// 	"results" : [{
 	// 		"?UNIX_MICROS": 1000000
-	// 	}
+	// 	}]
 	// }
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
