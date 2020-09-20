@@ -65,6 +65,8 @@ func recordWritesErrored(count float64) {
 	writesErrored.Add(count)
 }
 
+const defaultRocksetEndpoint = "https://api.rs2.usw2.rockset.com"
+
 func main() {
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
@@ -88,7 +90,7 @@ func main() {
 	switch strings.ToLower(destination) {
 	case "rockset":
 		apiKey := mustGetEnvString("ROCKSET_API_KEY")
-		apiServer := getEnvDefault("ROCKSET_API_SERVER", "https://api.rs2.usw2.rockset.com")
+		apiServer := getEnvDefault("ROCKSET_API_SERVER", defaultRocksetEndpoint)
 		collection := mustGetEnvString("ROCKSET_COLLECTION")
 
 		d = &Rockset{
