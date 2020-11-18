@@ -112,6 +112,30 @@ func main() {
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}
+	case "snowflake":
+		account := mustGetEnvString("SNOWFLAKE_ACCOUNT")
+		user := mustGetEnvString("SNOWFLAKE_USER")
+		password := mustGetEnvString("SNOWFLAKE_PASSWORD")
+		warehouse := mustGetEnvString("SNOWFLAKE_WAREHOUSE")
+		database := mustGetEnvString("SNOWFLAKE_DATABASE")
+		stageS3Bucket := mustGetEnvString("SNOWFLAKE_STAGES3BUCKETNAME")
+		awsRegion := mustGetEnvString("AWS_REGION")
+		d = &Snowflake{
+			account:             account,
+			user:                user,
+			password:            password,
+			warehouse:           warehouse,
+			database:            database,
+			generatorIdentifier: generatorIdentifier,
+			stageS3BucketName:   stageS3Bucket,
+			awsRegion:           awsRegion,
+			schema:              "PUBLIC",
+		}
+		snowFlake := d.(*Snowflake)
+		configErr := snowFlake.ConfigureDestination()
+		if configErr != nil {
+			log.Fatal("Unable to configure snowflake for sending documents: ", configErr)
+		}
 	case "null":
 		d = &Null{}
 	default:

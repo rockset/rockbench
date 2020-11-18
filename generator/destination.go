@@ -11,4 +11,7 @@ type Destination interface {
 
 	// Get latest timestamp seen in the destination.
 	GetLatestTimestamp() (time.Time, error)
+
+	// ConfigureDestination is used to make any configuration changes to the destination that might be required for sending documents.
+	ConfigureDestination() error
 }

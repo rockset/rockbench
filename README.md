@@ -24,6 +24,9 @@ ROCKSET_API_KEY=xxxx ROCKSET_COLLECTION=yyyy WPS=1 BATCH_SIZE=50 DESTINATION=Roc
 
 # Send data to ElasticSearch and report data latency
 ELASTIC_AUTH=xxxx ELASTIC_URL=https://... ELASTIC_INDEX=index_name WPS=1 BATCH_SIZE=50 DESTINATION=Elastic ./generator
+
+# Send data to Snowflake and report data latency
+SNOWFLAKE_ACCOUNT=xxxx SNOWFLAKE_USER=xxxx SNOWFLAKE_PASSWORD=xxxx SNOWFLAKE_WAREHOUSE=xxxx SNOWFLAKE_DATABASE=xxxx SNOWFLAKE_STAGES3BUCKETNAME=xxxx AWS_REGION=xxxx WPS=1 BATCH_SIZE=50 DESTINATION=Snowflake ./generator
 ```
 
 * To run with Docker container
