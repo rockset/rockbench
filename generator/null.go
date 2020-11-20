@@ -15,6 +15,5 @@ func (n *Null) GetLatestTimestamp() (time.Time, error) {
 }
 
 func (n *Null) ConfigureDestination() error {
-
 	return nil
 }

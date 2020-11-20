@@ -131,8 +131,7 @@ func main() {
 			awsRegion:           awsRegion,
 			schema:              "PUBLIC",
 		}
-		snowFlake := d.(*Snowflake)
-		configErr := snowFlake.ConfigureDestination()
+		configErr := d.ConfigureDestination()
 		if configErr != nil {
 			log.Fatal("Unable to configure snowflake for sending documents: ", configErr)
 		}

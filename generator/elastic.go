@@ -135,6 +135,5 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 }
 
 func (e *Elastic) ConfigureDestination() error {
-
 	return nil
 }

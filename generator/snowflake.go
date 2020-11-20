@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -42,10 +43,13 @@ func (r *Snowflake) SendDocument(docs []interface{}) error {
 			&credentials.EnvProvider{},
 		})
 
-	sess := session.Must(session.NewSession(&aws.Config{
+	sess, err := session.NewSession(&aws.Config{
 		Credentials: creds,
-		Region:      aws.String("us-west-2"),
-	}))
+		Region:      &r.awsRegion,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create a session with AWS, %v", err)
+	}
 
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploader(sess)
@@ -90,14 +94,24 @@ func (r *Snowflake) GetLatestTimestamp() (time.Time, error) {
 		return time.Time{}, fmt.Errorf("failed to open a connection with snowflake: %w", err)
 	}
 
-	defer db.Close()
+	defer func() {
+		err := db.Close()
+		if err != nil {
+			log.Printf("failed to close db connection: %v", err)
+		}
+	}()
 	getLatestTimeStampQuery := "select JSONTEXT:data[0]._event_time AS unixtime from " + r.table + " where JSONTEXT:data[0].generator_identifier = '" + r.generatorIdentifier + "' ORDER BY JSONTEXT:data[0]._event_time DESC limit 1"
 	rows, err := db.Query(getLatestTimeStampQuery)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to run a query. %v, err: %v", getLatestTimeStampQuery, err)
 	}
 	var unixtime interface{}
-	defer rows.Close()
+	defer func() {
+		err := rows.Close()
+		if err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 	for rows.Next() {
 		err := rows.Scan(&unixtime)
 		if err != nil {
@@ -107,14 +121,13 @@ func (r *Snowflake) GetLatestTimestamp() (time.Time, error) {
 	if unixtime != nil {
 		unixtimeFloat, err := strconv.ParseFloat(unixtime.(string), 64)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("could not convert unixtime from string to float64 %v", err)
+			return time.Time{}, fmt.Errorf("could not convert unixtime from string to float64 %w", err)
 		}
 		timeMicro := int64(unixtimeFloat)
 		// Convert from microseconds to (secs, nanosecs)
-		return time.Unix(timeMicro/1000000, (timeMicro%1000000)*1000), nil
-	} else {
-		return time.Time{}, errors.New("malformed result, value is nil")
+		return time.Unix(timeMicro/1_000_000, (timeMicro%1_000_000)*1000), nil
 	}
+	return time.Time{}, errors.New("malformed result, value is nil")
 
 }
 
@@ -152,16 +165,20 @@ func (r *Snowflake) ConfigureDestination() error {
 		return fmt.Errorf("failed to open a connection with snowflake: %w", err)
 	}
 
-	defer db.Close()
+	defer func() {
+		err := db.Close()
+		if err != nil {
+			log.Printf("failed to close db connection: %v", err)
+		}
+	}()
 	// create stage
 	stageName := "perfstage" + r.generatorIdentifier
 	createStageQuery := "create stage " + stageName + " url='s3://" + r.stageS3BucketName + "' credentials = (AWS_KEY_ID = '" + credValue.AccessKeyID + "' AWS_SECRET_KEY = '" + credValue.SecretAccessKey + "' );"
 	_, err = db.Query(createStageQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createStageQuery, err)
-	} else {
-		fmt.Println("created a stage named: ", stageName)
 	}
+	fmt.Println("created a stage named: ", stageName)
 
 	// create table
 	tableName := "perftable" + r.generatorIdentifier
@@ -169,10 +186,9 @@ func (r *Snowflake) ConfigureDestination() error {
 	_, err = db.Query(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createTableQuery, err)
-	} else {
-		fmt.Println("created a table named: ", tableName)
-		r.table = tableName
 	}
+	fmt.Println("created a table named: ", tableName)
+	r.table = tableName
 
 	// create pipe which will ingest data from s3 to snowflake table
 	pipeName := "perfpipe" + r.generatorIdentifier
@@ -180,9 +196,8 @@ func (r *Snowflake) ConfigureDestination() error {
 	_, err = db.Query(createPipeQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createPipeQuery, err)
-	} else {
-		fmt.Println("created a pipe named: ", pipeName)
 	}
+	fmt.Println("created a pipe named: ", pipeName)
 
 	// get the list of pipes and extract the notification channel for the pipe we created earlier
 	showPipeQuery := "show pipes"
@@ -192,7 +207,12 @@ func (r *Snowflake) ConfigureDestination() error {
 	}
 	var created_on, name, database_name, schema_name, owner, notification_channel, comment, notificationChannel string
 	var definition, integration, pattern sql.NullString
-	defer rows.Close()
+	defer func() {
+		err := rows.Close()
+		if err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 	for rows.Next() {
 		err := rows.Scan(&created_on, &name, &database_name, &schema_name, &definition, &owner, &notification_channel, &comment, &integration, &pattern)
 		if err != nil {
@@ -205,14 +225,17 @@ func (r *Snowflake) ConfigureDestination() error {
 		}
 	}
 	// create an AWSsession to configure s3 bucket used in stage
-	sess := session.Must(session.NewSession(&aws.Config{
+	sess, err := session.NewSession(&aws.Config{
 		Credentials: creds,
-		Region:      aws.String(r.awsRegion),
-	}))
+		Region:      &r.awsRegion,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create a session with AWS, %v", err)
+	}
 
 	svc := s3.New(sess)
 	input := &s3.PutBucketNotificationConfigurationInput{
-		Bucket: aws.String(r.stageS3BucketName),
+		Bucket: &r.stageS3BucketName,
 		NotificationConfiguration: &s3.NotificationConfiguration{
 			QueueConfigurations: []*s3.QueueConfiguration{
 				{
@@ -229,9 +252,8 @@ func (r *Snowflake) ConfigureDestination() error {
 	_, err = svc.PutBucketNotificationConfiguration(input)
 	if err != nil {
 		return fmt.Errorf("failed to configure notfication on stage s3 bucket, %v", err)
-	} else {
-		fmt.Println("created event notification on ", r.stageS3BucketName)
 	}
+	fmt.Println("created event notification on ", r.stageS3BucketName)
 
 	return nil
 }

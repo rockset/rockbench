@@ -119,6 +119,5 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 }
 
 func (r *Rockset) ConfigureDestination() error {
-
 	return nil
 }
