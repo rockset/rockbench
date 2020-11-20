@@ -217,11 +217,10 @@ func (r *Snowflake) ConfigureDestination() error {
 		err := rows.Scan(&created_on, &name, &database_name, &schema_name, &definition, &owner, &notification_channel, &comment, &integration, &pattern)
 		if err != nil {
 			return fmt.Errorf("failed to scan row to get notification channel info, err: %v", err)
-		} else {
-			if strings.ToLower(name) == strings.ToLower(pipeName) {
-				notificationChannel = notification_channel
-				break
-			}
+		}
+		if strings.ToLower(name) == strings.ToLower(pipeName) {
+			notificationChannel = notification_channel
+			break
 		}
 	}
 	// create an AWSsession to configure s3 bucket used in stage
