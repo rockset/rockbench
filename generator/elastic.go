@@ -133,3 +133,7 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	// Convert from microseconds to (secs, nanosecs)
 	return time.Unix(timeMicro/1_000_000, (timeMicro%1_000_000)*1_000), nil
 }
+
+func (e *Elastic) ConfigureDestination() error {
+	return nil
+}

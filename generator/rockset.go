@@ -117,3 +117,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 	// Convert from microseconds to (secs, nanosecs)
 	return time.Unix(timeMicro/1000000, (timeMicro%1000000)*1000), nil
 }
+
+func (r *Rockset) ConfigureDestination() error {
+	return nil
+}
