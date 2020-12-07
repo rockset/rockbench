@@ -48,6 +48,7 @@ func (r *Snowflake) SendDocument(docs []interface{}) error {
 		Region:      &r.awsRegion,
 	})
 	if err != nil {
+		recordWritesErrored(float64(numDocs))
 		return fmt.Errorf("failed to create a session with AWS, %v", err)
 	}
 
@@ -65,9 +66,11 @@ func (r *Snowflake) SendDocument(docs []interface{}) error {
 		Body:   data,
 	})
 	if err != nil {
+		recordWritesErrored(float64(numDocs))
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
 	fmt.Printf("file uploaded to, %s\n", aws.StringValue(&result.Location))
+	recordWritesCompleted(float64(numDocs))
 	return nil
 }
 
