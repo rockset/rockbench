@@ -31,7 +31,15 @@ type Snowflake struct {
 	stageS3BucketName   string
 	awsRegion           string
 	table               string
+	dbConnection        *sql.DB
 }
+
+// Snowflake has concept of stage & pipe:
+//   Stage is a area where data is written by a client before it is loaded to a snowflake table.
+//   Snowpipe (pipe) is a service which allows for bulk ingestion of data from stage to snowflake tables.
+// The Approach rockbench uses for executing benchmark tests on snowflake:
+//    It uses an AWS S3 bucket as stage and writes data to it.
+//    It configures S3 bucket to trigger snowpipe to load data into snowflake table as soon as it is written to stage (s3 bucket).
 
 // SendDocument sends a batch of documents to Snowflake
 func (r *Snowflake) SendDocument(docs []interface{}) error {
@@ -77,34 +85,8 @@ func (r *Snowflake) SendDocument(docs []interface{}) error {
 // GetLatestTimestamp returns the latest _event_time in Snowflake
 func (r *Snowflake) GetLatestTimestamp() (time.Time, error) {
 
-	snowflakeConfig := &snowflake.Config{
-		Account:   r.account,
-		User:      r.user,
-		Password:  r.password,
-		Database:  r.database,
-		Warehouse: r.warehouse,
-		Schema:    r.schema,
-	}
-
-	dsn, err := snowflake.DSN(snowflakeConfig)
-
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to create database string to connect snowflake: %w", err)
-	}
-
-	db, err := sql.Open("snowflake", dsn)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to open a connection with snowflake: %w", err)
-	}
-
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			log.Printf("failed to close db connection: %v", err)
-		}
-	}()
 	getLatestTimeStampQuery := "select JSONTEXT:data[0]._event_time AS unixtime from " + r.table + " where JSONTEXT:data[0].generator_identifier = '" + r.generatorIdentifier + "' ORDER BY JSONTEXT:data[0]._event_time DESC limit 1"
-	rows, err := db.Query(getLatestTimeStampQuery)
+	rows, err := r.dbConnection.Query(getLatestTimeStampQuery)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to run a query. %v, err: %v", getLatestTimeStampQuery, err)
 	}
@@ -163,21 +145,15 @@ func (r *Snowflake) ConfigureDestination() error {
 	}
 
 	// open a connection with snowflake
-	db, err := sql.Open("snowflake", dsn)
+	r.dbConnection, err = sql.Open("snowflake", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to open a connection with snowflake: %w", err)
 	}
 
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			log.Printf("failed to close db connection: %v", err)
-		}
-	}()
 	// create stage
 	stageName := "perfstage" + r.generatorIdentifier
 	createStageQuery := "create stage " + stageName + " url='s3://" + r.stageS3BucketName + "' credentials = (AWS_KEY_ID = '" + credValue.AccessKeyID + "' AWS_SECRET_KEY = '" + credValue.SecretAccessKey + "' );"
-	_, err = db.Query(createStageQuery)
+	_, err = r.dbConnection.Query(createStageQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createStageQuery, err)
 	}
@@ -186,7 +162,7 @@ func (r *Snowflake) ConfigureDestination() error {
 	// create table
 	tableName := "perftable" + r.generatorIdentifier
 	createTableQuery := "create table " + tableName + " ( jsontext variant );"
-	_, err = db.Query(createTableQuery)
+	_, err = r.dbConnection.Query(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createTableQuery, err)
 	}
@@ -196,7 +172,7 @@ func (r *Snowflake) ConfigureDestination() error {
 	// create pipe which will ingest data from s3 to snowflake table
 	pipeName := "perfpipe" + r.generatorIdentifier
 	createPipeQuery := "create pipe " + pipeName + " auto_ingest=true as copy into " + tableName + " from @" + stageName + " file_format = (type = 'JSON');"
-	_, err = db.Query(createPipeQuery)
+	_, err = r.dbConnection.Query(createPipeQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createPipeQuery, err)
 	}
@@ -204,7 +180,7 @@ func (r *Snowflake) ConfigureDestination() error {
 
 	// get the list of pipes and extract the notification channel for the pipe we created earlier
 	showPipeQuery := "show pipes"
-	rows, err := db.Query(showPipeQuery)
+	rows, err := r.dbConnection.Query(showPipeQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", showPipeQuery, err)
 	}
