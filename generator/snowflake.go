@@ -42,7 +42,7 @@ type Snowflake struct {
 //    It configures S3 bucket to trigger snowpipe to load data into snowflake table as soon as it is written to stage (s3 bucket).
 
 // SendDocument sends a batch of documents to Snowflake
-func (r *Snowflake) SendDocument(docs []interface{}) error {
+func (r *Snowflake) SendDocument(docs []any) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 
@@ -184,7 +184,7 @@ func (r *Snowflake) ConfigureDestination() error {
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", showPipeQuery, err)
 	}
-	var created_on, name, database_name, schema_name, owner, notification_channel, comment, notificationChannel string
+	var createdOn, name, databaseName, schemaName, owner, channel, comment, notificationChannel string
 	var definition, integration, pattern sql.NullString
 	defer func() {
 		err := rows.Close()
@@ -193,16 +193,16 @@ func (r *Snowflake) ConfigureDestination() error {
 		}
 	}()
 	for rows.Next() {
-		err := rows.Scan(&created_on, &name, &database_name, &schema_name, &definition, &owner, &notification_channel, &comment, &integration, &pattern)
+		err := rows.Scan(&createdOn, &name, &databaseName, &schemaName, &definition, &owner, &channel, &comment, &integration, &pattern)
 		if err != nil {
 			return fmt.Errorf("failed to scan row to get notification channel info, err: %v", err)
 		}
 		if strings.ToLower(name) == strings.ToLower(pipeName) {
-			notificationChannel = notification_channel
+			notificationChannel = channel
 			break
 		}
 	}
-	// create an AWSsession to configure s3 bucket used in stage
+	// create an AWS session to configure s3 bucket used in stage
 	sess, err := session.NewSession(&aws.Config{
 		Credentials: creds,
 		Region:      &r.awsRegion,

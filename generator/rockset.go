@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"strings"
@@ -22,7 +21,7 @@ type Rockset struct {
 }
 
 // SendDocument sends a batch of documents to Rockset
-func (r *Rockset) SendDocument(docs []interface{}) error {
+func (r *Rockset) SendDocument(docs []any) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 
@@ -43,10 +42,10 @@ func (r *Rockset) SendDocument(docs []interface{}) error {
 
 	if resp.StatusCode == http.StatusOK {
 		recordWritesCompleted(float64(numDocs))
-		_, _ = io.Copy(ioutil.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 	} else {
 		recordWritesErrored(float64(numDocs))
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err == nil {
 			bodyString := string(bodyBytes)
 			return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, bodyString)
@@ -81,7 +80,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 
 	defer deferredErrorCloser(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err == nil {
 			bodyString := string(bodyBytes)
 			fmt.Printf("Error code: %d, body: %s \n", resp.StatusCode, bodyString)
@@ -95,7 +94,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 	// 		"?UNIX_MICROS": 1000000
 	// 	}]
 	// }
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to read response body: %v", err)
 	}

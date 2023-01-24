@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const defaultRocksetEndpoint = "https://api.rs2.usw2.rockset.com"
+
 type RoundTripFunc func(req *http.Request) *http.Response
 
 func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
