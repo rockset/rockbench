@@ -91,12 +91,17 @@ func main() {
 	case "rockset":
 		apiKey := mustGetEnvString("ROCKSET_API_KEY")
 		apiServer := getEnvDefault("ROCKSET_API_SERVER", defaultRocksetEndpoint)
-		collection := mustGetEnvString("ROCKSET_COLLECTION")
+		collectionPath := mustGetEnvString("ROCKSET_COLLECTION")
+
+		rcollection := strings.Split(collectionPath, ".")
+		if (len(rcollection) != 2) {
+			panic(fmt.Sprintf("rockset collection path should have the format <workspace_name>.<collection_name>"))
+		}
 
 		d = &Rockset{
 			apiKey:              apiKey,
 			apiServer:           apiServer,
-			collection:          collection,
+			collectionPath:      collectionPath,
 			client:              client,
 			generatorIdentifier: generatorIdentifier,
 		}

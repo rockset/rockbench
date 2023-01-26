@@ -7,6 +7,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"strings"
 	"time"
 )
 
@@ -14,7 +16,7 @@ import (
 type Rockset struct {
 	apiKey              string
 	apiServer           string
-	collection          string
+	collectionPath      string
 	client              *http.Client
 	generatorIdentifier string
 }
@@ -24,7 +26,8 @@ func (r *Rockset) SendDocument(docs []interface{}) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 
-	URL := fmt.Sprintf("%s/v1/orgs/self/ws/commons/collections/%s/docs", r.apiServer, r.collection)
+	rcollection := strings.Split(r.collectionPath, ".") // this is already validated two have two components
+	URL := fmt.Sprintf("%s/v1/orgs/self/ws/%s/collections/%s/docs", r.apiServer, rcollection[0], rcollection[1])
 	body := map[string][]interface{}{"data": docs}
 	jsonBody, _ := json.Marshal(body)
 	req, _ := http.NewRequest(http.MethodPost, URL, bytes.NewBuffer(jsonBody))
@@ -55,7 +58,8 @@ func (r *Rockset) SendDocument(docs []interface{}) error {
 // GetLatestTimestamp returns the latest _event_time in Rockset
 func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 	url := fmt.Sprintf("%s/v1/orgs/self/queries", r.apiServer)
-	query := fmt.Sprintf("select UNIX_MICROS(_event_time) from %s where generator_identifier = '%s' ORDER BY _event_time DESC limit 1", r.collection, r.generatorIdentifier)
+	rcollection := strings.Split(r.collectionPath, ".") // this is already validated two have two components
+	query := fmt.Sprintf("select UNIX_MICROS(_event_time) from \"%s\".\"%s\" where generator_identifier = '%s' ORDER BY _event_time DESC limit 1", rcollection[0], rcollection[1], r.generatorIdentifier)
 	body := map[string]interface{}{"sql": map[string]interface{}{"query": query}}
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
