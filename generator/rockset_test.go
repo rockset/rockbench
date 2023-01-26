@@ -36,7 +36,7 @@ func NewRocksetClient(result string) *Rockset {
 	return &Rockset{
 		apiKey:              "test",
 		apiServer:           defaultRocksetEndpoint,
-		collection:          "test",
+		collectionPath:      "ws.test",
 		client:              client,
 		generatorIdentifier: "test",
 	}
