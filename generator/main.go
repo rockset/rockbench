@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bxcodec/faker/v3"
+	"github.com/go-faker/faker/v4"
 	guuid "github.com/google/uuid"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -65,8 +65,6 @@ func recordWritesErrored(count float64) {
 	writesErrored.Add(count)
 }
 
-const defaultRocksetEndpoint = "https://api.rs2.usw2.rockset.com"
-
 func main() {
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
@@ -90,11 +88,11 @@ func main() {
 	switch strings.ToLower(destination) {
 	case "rockset":
 		apiKey := mustGetEnvString("ROCKSET_API_KEY")
-		apiServer := getEnvDefault("ROCKSET_API_SERVER", defaultRocksetEndpoint)
+		apiServer := mustGetEnvString("ROCKSET_API_SERVER")
 		collectionPath := mustGetEnvString("ROCKSET_COLLECTION")
 
 		rcollection := strings.Split(collectionPath, ".")
-		if (len(rcollection) != 2) {
+		if len(rcollection) != 2 {
 			panic(fmt.Sprintf("rockset collection path should have the format <workspace_name>.<collection_name>"))
 		}
 
@@ -311,14 +309,6 @@ func generateRandomString(n int) string {
 		s[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(s)
-}
-
-func getEnvDefault(env string, defaultValue string) string {
-	v, found := os.LookupEnv(env)
-	if !found {
-		return defaultValue
-	}
-	return v
 }
 
 func mustGetEnvString(env string) string {

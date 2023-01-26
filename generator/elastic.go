@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -22,7 +22,7 @@ type Elastic struct {
 }
 
 // SendDocument sends a batch of documents to Rockset
-func (e *Elastic) SendDocument(docs []interface{}) error {
+func (e *Elastic) SendDocument(docs []any) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 	var builder bytes.Buffer
@@ -63,7 +63,7 @@ func (e *Elastic) SendDocument(docs []interface{}) error {
 
 	if resp.StatusCode != http.StatusOK {
 		recordWritesErrored(float64(numDocs))
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("failed to read response body: %w", err)
 		}
@@ -93,7 +93,7 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	defer deferredErrorCloser(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("failed to read %s response body: %w", resp.Status, err)
 		}
@@ -110,7 +110,7 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	//      }
 	// 	}
 	// }
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to read response body: %w", err)
 	}

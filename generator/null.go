@@ -5,7 +5,7 @@ import "time"
 // Null destination for local testing
 type Null struct{}
 
-func (n *Null) SendDocument(docs []interface{}) error {
+func (n *Null) SendDocument(docs []any) error {
 	recordWritesCompleted(float64(len(docs)))
 	return nil
 }
