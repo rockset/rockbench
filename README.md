@@ -40,6 +40,7 @@ RockBench can also measure the speed of patches.
 
 Setting `NUM_DOCS` to a non-negative value will limit the number of writes made and then perform patches against that document set.
 Patch mode must be explicitly enabled via `MODE=patch` and the patches per second is controlled via `PPS`.
+`PPS` == `WPS` unless `PPS` is specified.
 `BATCH_SIZE` is used for both patching and inserting.
 Each patch will update a timestamp field for latency detection and also one other field/array in the document.
 
