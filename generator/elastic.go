@@ -1,4 +1,4 @@
-package main
+package generator
 
 import (
 	"bytes"
@@ -14,11 +14,11 @@ import (
 
 // Elastic contains all configurations needed to send documents to Elastic
 type Elastic struct {
-	esAuth              string
-	esURL               string
-	esIndexName         string
-	client              *http.Client
-	generatorIdentifier string
+	Auth                string
+	URL                 string
+	IndexName           string
+	Client              *http.Client
+	GeneratorIdentifier string
 }
 
 // SendDocument sends a batch of documents to Rockset
@@ -33,7 +33,7 @@ func (e *Elastic) SendDocument(docs []any) error {
 		}
 
 		index := make(map[string]interface{})
-		index["_index"] = e.esIndexName
+		index["_index"] = e.IndexName
 		index["_id"] = guuid.New().String()
 		ret := make(map[string]interface{})
 		ret["index"] = index
@@ -49,12 +49,12 @@ func (e *Elastic) SendDocument(docs []any) error {
 	}
 
 	body := builder.Bytes()
-	bulkURL := e.esURL + "/_bulk"
+	bulkURL := e.URL + "/_bulk"
 	elasticHTTPRequest, _ := http.NewRequest(http.MethodPost, bulkURL, bytes.NewBuffer(body))
-	elasticHTTPRequest.Header.Add("Authorization", e.esAuth)
+	elasticHTTPRequest.Header.Add("Authorization", e.Auth)
 	elasticHTTPRequest.Header.Add("Content-Type", "application/x-ndjson")
 
-	resp, err := e.client.Do(elasticHTTPRequest)
+	resp, err := e.Client.Do(elasticHTTPRequest)
 	if err != nil {
 		recordWritesErrored(float64(numDocs))
 		return fmt.Errorf("failed to send request: %w", err)
@@ -75,18 +75,18 @@ func (e *Elastic) SendDocument(docs []any) error {
 
 // GetLatestTimestamp returns the latest _event_time in Rockset
 func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
-	searchURL := fmt.Sprintf("%s/%s/_search?size=0", e.esURL, e.esIndexName)
+	searchURL := fmt.Sprintf("%s/%s/_search?size=0", e.URL, e.IndexName)
 
-	jsonBody := fmt.Sprintf("{\"aggs\":{\"max_event_time_for_identifier\":{\"filter\":{\"term\":{\"generator_identifier\":\"%s\"}},\"aggs\":{\"max_event_time\":{\"max\":{\"field\":\"_event_time\"}}}}}}", e.generatorIdentifier)
+	jsonBody := fmt.Sprintf("{\"aggs\":{\"max_event_time_for_identifier\":{\"filter\":{\"term\":{\"generator_identifier\":\"%s\"}},\"aggs\":{\"max_event_time\":{\"max\":{\"field\":\"_event_time\"}}}}}}", e.GeneratorIdentifier)
 	req, err := http.NewRequest(http.MethodPost, searchURL, bytes.NewBufferString(jsonBody))
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to create new request: %w", err)
 	}
 
-	req.Header.Add("Authorization", e.esAuth)
+	req.Header.Add("Authorization", e.Auth)
 	req.Header.Add("Content-Type", "application/json")
 
-	resp, err := e.client.Do(req)
+	resp, err := e.Client.Do(req)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to perform request: %w", err)
 	}

@@ -1,4 +1,4 @@
-module github.com/rockset/rockbench/generator
+module github.com/rockset/rockbench
 
 go 1.19
 

@@ -1,4 +1,4 @@
-package main
+package generator
 
 import (
 	"bytes"
@@ -23,17 +23,17 @@ import (
 
 // Snowflake contains all configurations needed to send documents to Snowflake
 type Snowflake struct {
-	account             string
-	user                string
-	password            string
-	warehouse           string
-	database            string
-	schema              string
-	generatorIdentifier string
-	stageS3BucketName   string
-	awsRegion           string
-	table               string
-	dbConnection        *sql.DB
+	Account             string
+	User                string
+	Password            string
+	Warehouse           string
+	Database            string
+	Schema              string
+	GeneratorIdentifier string
+	StageS3BucketName   string
+	AWSRegion           string
+	Table               string
+	DBConnection        *sql.DB
 }
 
 // Snowflake has concept of stage & pipe:
@@ -49,7 +49,7 @@ func (r *Snowflake) SendDocument(docs []any) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(r.awsRegion))
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(r.AWSRegion))
 	if err != nil {
 		return fmt.Errorf("unable to load SDK config, %v", err)
 	}
@@ -63,7 +63,7 @@ func (r *Snowflake) SendDocument(docs []any) error {
 
 	// Upload the file to S3.
 	result, err := uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: &r.stageS3BucketName,
+		Bucket: &r.StageS3BucketName,
 		Key:    aws.String(time.Now().String()),
 		Body:   data,
 	})
@@ -80,8 +80,8 @@ func (r *Snowflake) SendDocument(docs []any) error {
 // GetLatestTimestamp returns the latest _event_time in Snowflake
 func (r *Snowflake) GetLatestTimestamp() (time.Time, error) {
 
-	getLatestTimeStampQuery := "select JSONTEXT:data[0]._event_time AS unixtime from " + r.table + " where JSONTEXT:data[0].generator_identifier = '" + r.generatorIdentifier + "' ORDER BY JSONTEXT:data[0]._event_time DESC limit 1"
-	rows, err := r.dbConnection.Query(getLatestTimeStampQuery)
+	getLatestTimeStampQuery := "select JSONTEXT:data[0]._event_time AS unixtime from " + r.Table + " where JSONTEXT:data[0].generator_identifier = '" + r.GeneratorIdentifier + "' ORDER BY JSONTEXT:data[0]._event_time DESC limit 1"
+	rows, err := r.DBConnection.Query(getLatestTimeStampQuery)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to run a query. %v, err: %v", getLatestTimeStampQuery, err)
 	}
@@ -114,7 +114,7 @@ func (r *Snowflake) GetLatestTimestamp() (time.Time, error) {
 // ConfigureDestination is used to make configuration changes to the Snowflake instance for sending documents.
 func (r *Snowflake) ConfigureDestination() error {
 	ctx := context.TODO()
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(r.awsRegion))
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(r.AWSRegion))
 	if err != nil {
 		return fmt.Errorf("unable to load SDK config, %v", err)
 	}
@@ -124,12 +124,12 @@ func (r *Snowflake) ConfigureDestination() error {
 	}
 
 	snowflakeConfig := &snowflake.Config{
-		Account:   r.account,
-		User:      r.user,
-		Password:  r.password,
-		Database:  r.database,
-		Warehouse: r.warehouse,
-		Schema:    r.schema,
+		Account:   r.Account,
+		User:      r.User,
+		Password:  r.Password,
+		Database:  r.Database,
+		Warehouse: r.Warehouse,
+		Schema:    r.Schema,
 	}
 
 	// create DSN for snowflake
@@ -140,34 +140,35 @@ func (r *Snowflake) ConfigureDestination() error {
 	}
 
 	// open a connection with snowflake
-	r.dbConnection, err = sql.Open("snowflake", dsn)
+	r.DBConnection, err = sql.Open("snowflake", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to open a connection with snowflake: %w", err)
 	}
 
 	// create stage
-	stageName := "perfstage" + r.generatorIdentifier
-	createStageQuery := "create stage " + stageName + " url='s3://" + r.stageS3BucketName + "' credentials = (AWS_KEY_ID = '" + creds.AccessKeyID + "' AWS_SECRET_KEY = '" + creds.SecretAccessKey + "' );"
-	_, err = r.dbConnection.Query(createStageQuery)
+	stageName := "perfstage" + r.GeneratorIdentifier
+	createStageQuery := "create stage " + stageName + " url='s3://" + r.StageS3BucketName + "' credentials = (AWS_KEY_ID = '" + creds.AccessKeyID + "' AWS_SECRET_KEY = '" + creds.SecretAccessKey + "' );"
+	_, err = r.DBConnection.Query(createStageQuery)
+
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createStageQuery, err)
 	}
 	fmt.Println("created a stage named: ", stageName)
 
 	// create table
-	tableName := "perftable" + r.generatorIdentifier
+	tableName := "perftable" + r.GeneratorIdentifier
 	createTableQuery := "create table " + tableName + " ( jsontext variant );"
-	_, err = r.dbConnection.Query(createTableQuery)
+	_, err = r.DBConnection.Query(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createTableQuery, err)
 	}
 	fmt.Println("created a table named: ", tableName)
-	r.table = tableName
+	r.Table = tableName
 
 	// create pipe which will ingest data from s3 to snowflake table
-	pipeName := "perfpipe" + r.generatorIdentifier
+	pipeName := "perfpipe" + r.GeneratorIdentifier
 	createPipeQuery := "create pipe " + pipeName + " auto_ingest=true as copy into " + tableName + " from @" + stageName + " file_format = (type = 'JSON');"
-	_, err = r.dbConnection.Query(createPipeQuery)
+	_, err = r.DBConnection.Query(createPipeQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createPipeQuery, err)
 	}
@@ -175,7 +176,7 @@ func (r *Snowflake) ConfigureDestination() error {
 
 	// get the list of pipes and extract the notification channel for the pipe we created earlier
 	showPipeQuery := "show pipes"
-	rows, err := r.dbConnection.Query(showPipeQuery)
+	rows, err := r.DBConnection.Query(showPipeQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", showPipeQuery, err)
 	}
@@ -200,7 +201,7 @@ func (r *Snowflake) ConfigureDestination() error {
 	// create an AWS session to configure s3 bucket used in stage
 	svc := s3.NewFromConfig(cfg)
 	input := &s3.PutBucketNotificationConfigurationInput{
-		Bucket: &r.stageS3BucketName,
+		Bucket: &r.StageS3BucketName,
 		NotificationConfiguration: &types.NotificationConfiguration{
 			QueueConfigurations: []types.QueueConfiguration{
 				{
@@ -216,7 +217,7 @@ func (r *Snowflake) ConfigureDestination() error {
 	if err != nil {
 		return fmt.Errorf("failed to configure notfication on stage s3 bucket, %v", err)
 	}
-	fmt.Println("created event notification on ", r.stageS3BucketName)
+	fmt.Println("created event notification on ", r.StageS3BucketName)
 
 	return nil
 }

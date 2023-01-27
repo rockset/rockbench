@@ -1,4 +1,4 @@
-package main
+package generator
 
 import (
 	"bytes"
@@ -22,11 +22,11 @@ func NewElasticClient(result string) *Elastic {
 	})
 
 	return &Elastic{
-		esAuth:              "test",
-		esURL:               "test",
-		esIndexName:         "test",
-		client:              client,
-		generatorIdentifier: "test",
+		Auth:                "test",
+		URL:                 "test",
+		IndexName:           "test",
+		Client:              client,
+		GeneratorIdentifier: "test",
 	}
 }
 func TestElastic_GetLatestTimestamp(t *testing.T) {
@@ -42,7 +42,7 @@ func TestElastic_GetLatestTimestamp(t *testing.T) {
 func TestElastic_SendDocument(t *testing.T) {
 	r := NewElasticClient("")
 
-	docs, err := generateDocs(10, "Elastic")
+	docs, err := GenerateDocs(10, "Elastic", r.GeneratorIdentifier)
 	assert.Nil(t, err)
 	err = r.SendDocument(docs)
 	assert.Nil(t, err)
