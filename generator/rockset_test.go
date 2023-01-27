@@ -46,7 +46,7 @@ func NewRocksetClient(result string) *Rockset {
 
 func TestRockset_GetLatestTimestamp(t *testing.T) {
 	expected := time.Now()
-	r := NewRocksetClient(fmt.Sprintf(`{"results":[{"?UNIX_MICROS": %d}]}`,
+	r := NewRocksetClient(fmt.Sprintf(`{"results":[{"ts": %d}]}`,
 		expected.UnixNano()/1000))
 
 	t0, err := r.GetLatestTimestamp()
