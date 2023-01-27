@@ -2,20 +2,22 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
 	"log"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	snowflake "github.com/snowflakedb/gosnowflake"
 )
 
@@ -43,33 +45,25 @@ type Snowflake struct {
 
 // SendDocument sends a batch of documents to Snowflake
 func (r *Snowflake) SendDocument(docs []any) error {
+	ctx := context.TODO()
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 
-	creds := credentials.NewChainCredentials(
-		[]credentials.Provider{
-			&credentials.EnvProvider{},
-		})
-
-	sess, err := session.NewSession(&aws.Config{
-		Credentials: creds,
-		Region:      &r.awsRegion,
-	})
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(r.awsRegion))
 	if err != nil {
-		recordWritesErrored(float64(numDocs))
-		return fmt.Errorf("failed to create a session with AWS, %v", err)
+		return fmt.Errorf("unable to load SDK config, %v", err)
 	}
 
 	// Create an uploader with the session and default options
-	uploader := s3manager.NewUploader(sess)
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 
 	body := map[string][]interface{}{"data": docs}
 	jsonBody, _ := json.Marshal(body)
 	data := bytes.NewReader(jsonBody)
 
 	// Upload the file to S3.
-	result, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(r.stageS3BucketName),
+	result, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: &r.stageS3BucketName,
 		Key:    aws.String(time.Now().String()),
 		Body:   data,
 	})
@@ -77,8 +71,9 @@ func (r *Snowflake) SendDocument(docs []any) error {
 		recordWritesErrored(float64(numDocs))
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
-	fmt.Printf("file uploaded to, %s\n", aws.StringValue(&result.Location))
+	fmt.Printf("file uploaded to, %s\n", result.Location)
 	recordWritesCompleted(float64(numDocs))
+
 	return nil
 }
 
@@ -118,16 +113,16 @@ func (r *Snowflake) GetLatestTimestamp() (time.Time, error) {
 
 // ConfigureDestination is used to make configuration changes to the Snowflake instance for sending documents.
 func (r *Snowflake) ConfigureDestination() error {
-
-	creds := credentials.NewChainCredentials(
-		[]credentials.Provider{
-			&credentials.EnvProvider{},
-		})
-	// get AWS_KEY_ID & AWS_SECRET_KEY from aws credentials
-	credValue, err := creds.Get()
+	ctx := context.TODO()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(r.awsRegion))
 	if err != nil {
-		return fmt.Errorf("failed to retrieve AWS credentials, %v", err)
+		return fmt.Errorf("unable to load SDK config, %v", err)
 	}
+	creds, err := cfg.Credentials.Retrieve(ctx)
+	if err != nil {
+		return fmt.Errorf("unable retrieve credentials, %v", err)
+	}
+
 	snowflakeConfig := &snowflake.Config{
 		Account:   r.account,
 		User:      r.user,
@@ -152,7 +147,7 @@ func (r *Snowflake) ConfigureDestination() error {
 
 	// create stage
 	stageName := "perfstage" + r.generatorIdentifier
-	createStageQuery := "create stage " + stageName + " url='s3://" + r.stageS3BucketName + "' credentials = (AWS_KEY_ID = '" + credValue.AccessKeyID + "' AWS_SECRET_KEY = '" + credValue.SecretAccessKey + "' );"
+	createStageQuery := "create stage " + stageName + " url='s3://" + r.stageS3BucketName + "' credentials = (AWS_KEY_ID = '" + creds.AccessKeyID + "' AWS_SECRET_KEY = '" + creds.SecretAccessKey + "' );"
 	_, err = r.dbConnection.Query(createStageQuery)
 	if err != nil {
 		return fmt.Errorf("failed to run a query. %v, err: %v", createStageQuery, err)
@@ -203,31 +198,21 @@ func (r *Snowflake) ConfigureDestination() error {
 		}
 	}
 	// create an AWS session to configure s3 bucket used in stage
-	sess, err := session.NewSession(&aws.Config{
-		Credentials: creds,
-		Region:      &r.awsRegion,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create a session with AWS, %v", err)
-	}
-
-	svc := s3.New(sess)
+	svc := s3.NewFromConfig(cfg)
 	input := &s3.PutBucketNotificationConfigurationInput{
 		Bucket: &r.stageS3BucketName,
-		NotificationConfiguration: &s3.NotificationConfiguration{
-			QueueConfigurations: []*s3.QueueConfiguration{
+		NotificationConfiguration: &types.NotificationConfiguration{
+			QueueConfigurations: []types.QueueConfiguration{
 				{
-					Id: aws.String("snowflake-notifications"),
-					Events: []*string{
-						aws.String("s3:ObjectCreated:*"),
-					},
+					Id:       aws.String("snowflake-notifications"),
+					Events:   []types.Event{"s3:ObjectCreated:*"},
 					QueueArn: aws.String(notificationChannel),
 				},
 			},
 		},
 	}
 	// configure s3 bucket to send notification to notification channel of the snowpipe on every object create event
-	_, err = svc.PutBucketNotificationConfiguration(input)
+	_, err = svc.PutBucketNotificationConfiguration(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to configure notfication on stage s3 bucket, %v", err)
 	}
