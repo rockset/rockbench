@@ -14,6 +14,9 @@ type Destination interface {
 	// SendDocument sends a batch of documents to the destination.
 	SendDocument(docs []any) error
 
+	// Send a batch of patches to the destination.
+	SendPatch(docs []any) error
+
 	// GetLatestTimestamp get latest timestamp seen in the destination.
 	GetLatestTimestamp() (time.Time, error)
 
@@ -40,6 +43,14 @@ func recordWritesErrored(count float64) {
 	writesErrored.Add(count)
 }
 
+func recordPatchesCompleted(count float64) {
+	patchesCompleted.Add(count)
+}
+
+func recordPatchesErrored(count float64) {
+	patchesErrored.Add(count)
+}
+
 var (
 	// More info can found here: https://godoc.org/github.com/prometheus/client_golang/prometheus#NewSummary
 	objectiveMap = map[float64]float64{0.5: 0.05, 0.95: 0.005}
@@ -52,6 +63,16 @@ var (
 	writesErrored = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "writes_errored",
 		Help: "The total number of writes errored",
+	})
+
+	patchesCompleted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "patches_completed",
+		Help: "The total number of patches completed",
+	})
+
+	patchesErrored = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "patches_errored",
+		Help: "The total number of patches errored",
 	})
 
 	e2eLatencies = promauto.NewGauge(prometheus.GaugeOpts{
