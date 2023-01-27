@@ -35,6 +35,21 @@ docker build -t data_generator .
 docker run -e [env variable as above] data_generator
 ```
 
+### Modes
+RockBench can also measure the speed of patches.
+
+Setting `NUM_DOCS` to a non-negative value will limit the number of writes made and then perform patches against that document set.
+Patch mode must be explicitly enabled via `MODE=patch` and the patches per second is controlled via `PPS`.
+`BATCH_SIZE` is used for both patching and inserting.
+Each patch will update a timestamp field for latency detection and also one other field/array in the document.
+
+Patches can take on various forms, currently
+- replace: replaces random fields with roughly equivalent type and similar size
+- add: Adds new top level fields and prepends entries into the top level tags array
+
+Specify `PATCH_MODE` as either 'replace' or 'add'. Default will be 'replace'.
+
+
 ## How to extend RockBench to measure your favourite realtime database
 
 Implement the [Destination](https://github.com/rockset/rockbench/blob/master/generator/destination.go) interface and provide the appropriate configs required. Check [Rockset](https://github.com/rockset/rockbench/blob/master/generator/rockset.go) and [Elastic](https://github.com/rockset/rockbench/blob/master/generator/elastic.go) for reference. The interface has two methods:

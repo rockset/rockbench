@@ -36,6 +36,11 @@ type Snowflake struct {
 	DBConnection        *sql.DB
 }
 
+func (r *Snowflake) SendPatch(docs []interface{}) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 // Snowflake has concept of stage & pipe:
 //   Stage is a area where data is written by a client before it is loaded to a snowflake table.
 //   Snowpipe (pipe) is a service which allows for bulk ingestion of data from stage to snowflake tables.

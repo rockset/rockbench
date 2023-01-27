@@ -6,7 +6,12 @@ import "time"
 type Null struct{}
 
 func (n *Null) SendDocument(docs []any) error {
+
 	recordWritesCompleted(float64(len(docs)))
+	return nil
+}
+
+func (n *Null) SendPatch(docs []interface{}) error {
 	return nil
 }
 

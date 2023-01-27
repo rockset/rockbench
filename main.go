@@ -19,7 +19,18 @@ func main() {
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := mustGetEnvString("DESTINATION")
+	num_docs := getEnvDefaultInt("NUM_DOCS", -1)
+	mode := getEnvDefault("MODE", "add")
+	patch_mode := getEnvDefault("PATCH_MODE", "replace")
 
+	if !(patch_mode == "replace" || patch_mode == "add") {
+		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
+	}
+	if !(mode == "add" || mode == "patch") {
+		panic("Invalid mode specified, expecting 'add' or 'patch'")
+	}
+
+	pps := getEnvDefaultInt("PPS", wps)
 	defaultRoundTripper := http.DefaultTransport
 	defaultTransportPointer, ok := defaultRoundTripper.(*http.Transport)
 	if !ok {
@@ -113,8 +124,8 @@ func main() {
 			case <-doneChan:
 				return
 			case <-t.C:
-				now := time.Now()
 				latestTimestamp, err := d.GetLatestTimestamp()
+				now := time.Now()
 				latency := now.Sub(latestTimestamp)
 
 				if err == nil {
@@ -130,7 +141,8 @@ func main() {
 	// Write function
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	for {
+	docs_written := 0
+	for num_docs < 0 || docs_written < num_docs {
 		select {
 		// when doneChan is closed, receive immediately returns the zero value
 		case <-doneChan:
@@ -149,8 +161,45 @@ func main() {
 						log.Printf("failed to send document %d of %d: %v", i, wps, err)
 					}
 				}(i)
+				docs_written = docs_written + batchSize
 			}
 			// TODO: this does not guarantee that the writes have finished
+		}
+	}
+
+	if mode == "patch" {
+		if destination != "Rockset" {
+			panic("Patches can only be generated for Rockset at this time")
+		}
+		patchChannel := make(chan map[string]interface{}, 1)
+		log.Printf("Sending patches in '%s' mode", patch_mode)
+		if patch_mode == "replace" {
+			go generator.RandomFieldReplace(patchChannel)
+		} else {
+			go generator.RandomFieldAdd(patchChannel)
+		}
+		for {
+			select {
+			// when doneChan is closed, receive immediately returns the zero value
+			case <-doneChan:
+				log.Printf("done")
+				os.Exit(0)
+			case <-t.C:
+				for i := 0; i < pps; i++ {
+					docs, err := generator.GeneratePatches(batchSize, patchChannel)
+					if err != nil {
+						log.Printf("patch generation failed: %v", err)
+						os.Exit(1)
+					}
+					go func(i int) {
+						if err := d.SendPatch(docs); err != nil {
+							log.Printf("failed to send patch %d of %d: %v", i, pps, err)
+						}
+					}(i)
+					docs_written = docs_written + batchSize
+				}
+			}
+
 		}
 	}
 }
@@ -173,6 +222,26 @@ func mustGetEnvInt(env string) int {
 		log.Fatalf("env %s is not integer!", env)
 	}
 	return ret
+}
+
+func getEnvDefaultInt(env string, defaultValue int) int {
+	v, found := os.LookupEnv(env)
+	if !found {
+		return defaultValue
+	}
+	ret, err := strconv.Atoi(v)
+	if err != nil {
+		log.Fatalf("env %s is not integer!", env)
+	}
+	return ret
+}
+
+func getEnvDefault(env string, defaultValue string) string {
+	v, found := os.LookupEnv(env)
+	if !found {
+		return defaultValue
+	}
+	return v
 }
 
 // metricListener needs to be launched asynchronously, as ListenAndServe is a blocking call

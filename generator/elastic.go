@@ -21,6 +21,11 @@ type Elastic struct {
 	GeneratorIdentifier string
 }
 
+func (j *Elastic) SendPatch(docs []interface{}) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 // SendDocument sends a batch of documents to Rockset
 func (e *Elastic) SendDocument(docs []any) error {
 	numDocs := len(docs)

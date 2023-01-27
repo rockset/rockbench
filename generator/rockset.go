@@ -24,7 +24,7 @@ func (r *Rockset) SendDocument(docs []any) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 
-	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated two have two components
+	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated to have two components
 	URL := fmt.Sprintf("%s/v1/orgs/self/ws/%s/collections/%s/docs", r.APIServer, rcollection[0], rcollection[1])
 	body := map[string][]interface{}{"data": docs}
 	jsonBody, _ := json.Marshal(body)
@@ -53,11 +53,42 @@ func (r *Rockset) SendDocument(docs []any) error {
 	return nil
 }
 
+func (r *Rockset) SendPatch(docs []interface{}) error {
+	numDocs := len(docs)
+	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated to have two components
+	URL := fmt.Sprintf("%s/v1/orgs/self/ws/%s/collections/%s/docs", r.APIServer, rcollection[0], rcollection[1])
+	body := map[string][]interface{}{"data": docs}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest(http.MethodPatch, URL, bytes.NewBuffer(jsonBody))
+	req.Header.Add("Authorization", fmt.Sprintf("ApiKey %s", r.APIKey))
+	req.Header.Add("Content-Type", "application/json")
+	resp, err := r.Client.Do(req)
+	if err != nil {
+		fmt.Println("Error during request!", err)
+		return err
+	}
+	defer deferredErrorCloser(resp.Body)
+
+	if resp.StatusCode == http.StatusOK {
+		recordPatchesCompleted(float64(numDocs))
+		_, _ = io.Copy(io.Discard, resp.Body)
+	} else {
+		recordPatchesErrored(float64(numDocs))
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err == nil {
+			bodyString := string(bodyBytes)
+			return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, bodyString)
+		}
+	}
+	return nil
+}
+
 // GetLatestTimestamp returns the latest _event_time in Rockset
 func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
+
 	url := fmt.Sprintf("%s/v1/orgs/self/queries", r.APIServer)
-	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated two have two components
-	query := fmt.Sprintf("select UNIX_MICROS(_event_time) from \"%s\".\"%s\" where generator_identifier = '%s' ORDER BY _event_time DESC limit 1", rcollection[0], rcollection[1], r.GeneratorIdentifier)
+	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated to have two components
+	query := fmt.Sprintf("select _ts as ts from \"%s\".\"%s\" where generator_identifier = '%s' ORDER BY _ts DESC limit 1", rcollection[0], rcollection[1], r.GeneratorIdentifier)
 	body := map[string]interface{}{"sql": map[string]interface{}{"query": query}}
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
@@ -90,7 +121,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 	// Received status 200. Result structure will look something like
 	// {
 	// 	"results" : [{
-	// 		"?UNIX_MICROS": 1000000
+	// 		"ts": 1000000
 	// 	}]
 	// }
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -110,7 +141,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 
 	x0 := x[0]
 	y := x0.(map[string]interface{})
-	yc := y["?UNIX_MICROS"]
+	yc := y["ts"]
 	if yc == nil {
 		return time.Time{}, fmt.Errorf("malformed result")
 	}

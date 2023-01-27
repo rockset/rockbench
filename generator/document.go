@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-faker/faker/v4"
-	guuid "github.com/google/uuid"
 	"math/rand"
 	"time"
 )
@@ -62,6 +61,8 @@ type FriendDetailsStruct struct {
 	Age  int `faker:"oneof: 15, 27, 61"`
 }
 
+var doc_id = 0
+
 func GenerateDoc(destination, identifier string) (interface{}, error) {
 	docStruct := DocStruct{}
 	err := faker.FakeData(&docStruct)
@@ -77,13 +78,22 @@ func GenerateDoc(destination, identifier string) (interface{}, error) {
 	}
 
 	if destination == "Rockset" {
-		doc["_id"] = guuid.New().String()
+		doc["_id"] = formatDocId(doc_id)
+		doc_id = doc_id + 1
 	}
 
 	doc["_event_time"] = CurrentTimeMicros()
+	// Set _ts as _event_time is not mutable
+	doc["_ts"] = CurrentTimeMicros()
 	doc["generator_identifier"] = identifier
 
 	return doc, nil
+}
+
+func getMaxDoc() int {
+	// doc_ids are left padded monotonic integers,
+	//this returns the highest exclusive doc id for purposes of issuing patches.
+	return doc_id
 }
 
 func CurrentTimeMicros() int64 {
@@ -113,4 +123,163 @@ func RandomString(n int) string {
 		s[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(s)
+}
+
+func GeneratePatches(num_patch int, c chan map[string]interface{}) ([]interface{}, error) {
+	ids_to_patch := genUniqueInRange(getMaxDoc(), num_patch)
+	patches := make([]interface{}, 0)
+
+	for _, id := range ids_to_patch {
+		patch := generatePatch(id, <-c)
+		patches = append(patches, patch)
+	}
+
+	return patches, nil
+}
+
+func RandomFieldAdd(c chan map[string]interface{}) {
+	// Adding fields or array members
+	for {
+		options := []map[string]interface{}{{
+			"op":    "add",
+			"path":  "/" + faker.UUIDDigit(),
+			"value": faker.Email(),
+		},
+			{
+				"op":    "add",
+				"path":  "/Tags/-",
+				"value": faker.UUIDHyphenated(), // Append to tags array
+			},
+		}
+		shuffleAndFillChannel(options, c)
+	}
+
+}
+
+func RandomFieldReplace(c chan map[string]interface{}) {
+	// Purely replacement of fields
+	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		options := []map[string]interface{}{{
+			"op":    "replace",
+			"path":  "/Email",
+			"value": faker.Email(),
+		},
+			{
+				"op":    "replace",
+				"path":  "/About",
+				"value": faker.Sentence(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Company",
+				"value": faker.Word() + "-" + faker.Word(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Name/First",
+				"value": faker.FirstName(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Name/Last",
+				"value": faker.LastName(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Age",
+				"value": random.Intn(100),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Balance",
+				"value": random.Float64(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Registered",
+				"value": faker.Timestamp(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Phone",
+				"value": faker.Phonenumber(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Picture",
+				"value": faker.UUIDDigit(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Guid",
+				"value": faker.UUIDHyphenated(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Greeting",
+				"value": faker.Paragraph(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Address/ZipCode",
+				"value": random.Intn(100000),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Address/Coordinates/Longitude",
+				"value": faker.Longitude(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Address/Coordinates/Latitude",
+				"value": faker.Latitude(),
+			},
+			{
+				"op":    "replace",
+				"path":  "/Address/City",
+				"value": faker.Word(),
+			}}
+		shuffleAndFillChannel(options, c)
+	}
+}
+
+func genUniqueInRange(limit int, count int) []int {
+	random := rand.New(rand.NewSource(CurrentTimeMicros()))
+	ids_to_patch := make(map[int]struct{}, count)
+	for len(ids_to_patch) < count {
+		id := random.Intn(limit)
+		_, exists := ids_to_patch[id]
+		if !exists {
+			ids_to_patch[id] = struct{}{}
+		}
+	}
+
+	ids := make([]int, count)
+	for k, _ := range ids_to_patch {
+		ids = append(ids, k)
+	}
+	return ids
+}
+
+func generatePatch(id int, field_patch map[string]interface{}) map[string]interface{} {
+	patch := make(map[string]interface{})
+	patch["_id"] = formatDocId(id)
+	add_op := []map[string]interface{}{field_patch, {"op": "add", "path": "/_ts", "value": CurrentTimeMicros()}}
+	patch["patch"] = add_op
+	return patch
+}
+
+func shuffleAndFillChannel(options []map[string]interface{}, c chan map[string]interface{}) {
+	rand.Shuffle(len(options), func(i, j int) {
+		options[i], options[j] = options[j], options[i]
+	})
+	for _, op := range options {
+		c <- op
+
+	}
+}
+
+func formatDocId(id int) string {
+	return fmt.Sprintf("%024d", id)
 }
