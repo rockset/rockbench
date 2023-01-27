@@ -1,4 +1,4 @@
-package main
+package generator
 
 import (
 	"bytes"
@@ -36,11 +36,11 @@ func NewRocksetClient(result string) *Rockset {
 	})
 
 	return &Rockset{
-		apiKey:              "test",
-		apiServer:           defaultRocksetEndpoint,
-		collectionPath:      "ws.test",
-		client:              client,
-		generatorIdentifier: "test",
+		APIKey:              "test",
+		APIServer:           defaultRocksetEndpoint,
+		CollectionPath:      "ws.test",
+		Client:              client,
+		GeneratorIdentifier: "test",
 	}
 }
 
@@ -57,7 +57,7 @@ func TestRockset_GetLatestTimestamp(t *testing.T) {
 func TestRockset_SendDocument(t *testing.T) {
 	r := NewRocksetClient("")
 
-	docs, err := generateDocs(10, "Rockset")
+	docs, err := GenerateDocs(10, "Rockset", r.GeneratorIdentifier)
 	assert.Nil(t, err)
 	err = r.SendDocument(docs)
 	assert.Nil(t, err)

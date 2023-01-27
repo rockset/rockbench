@@ -1,7 +1,12 @@
-package main
+package generator
 
 import (
+	"io"
+	"log"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Destination is where to send the generated documents to
@@ -15,3 +20,51 @@ type Destination interface {
 	// ConfigureDestination is used to make any configuration changes to the destination that might be required for sending documents.
 	ConfigureDestination() error
 }
+
+func deferredErrorCloser(c io.Closer) {
+	if err := c.Close(); err != nil {
+		log.Printf("failed to close body: %v", err)
+	}
+}
+
+func RecordE2ELatency(latency float64) {
+	e2eLatencies.Set(latency)
+	e2eLatenciesSummary.Observe(latency)
+}
+
+func recordWritesCompleted(count float64) {
+	writesCompleted.Add(count)
+}
+
+func recordWritesErrored(count float64) {
+	writesErrored.Add(count)
+}
+
+var (
+	// More info can found here: https://godoc.org/github.com/prometheus/client_golang/prometheus#NewSummary
+	objectiveMap = map[float64]float64{0.5: 0.05, 0.95: 0.005}
+
+	writesCompleted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "writes_completed",
+		Help: "The total number of writes completed",
+	})
+
+	writesErrored = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "writes_errored",
+		Help: "The total number of writes errored",
+	})
+
+	e2eLatencies = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "e2e_latencies",
+		Help: "The e2e latency between client and the Destination",
+	})
+	e2eLatenciesSummary = promauto.NewSummary(prometheus.SummaryOpts{
+		Name:       "e2e_latencies_metric",
+		Help:       "e2e latency in micro-seconds between client and the Destination",
+		Objectives: objectiveMap,
+	})
+	numEventIngested = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "num_events_ingested",
+		Help: "Number of events ingested to the Destination",
+	})
+)
