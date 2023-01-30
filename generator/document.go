@@ -24,7 +24,7 @@ type DocStruct struct {
 	Registered string   `faker:"timestamp"`
 	Tags       []string `faker:"slice_len=9,len=14"`
 	Friends    FriendStruct
-	Greeting   string `faker:"paragraph"`
+	Greeting   string `faker:"sentence"`
 }
 
 type NameStruct struct {
