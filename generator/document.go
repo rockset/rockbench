@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-faker/faker/v4"
+	guuid "github.com/google/uuid"
 	"math/rand"
 	"time"
 )
@@ -21,9 +22,9 @@ type DocStruct struct {
 	Address    AddressStruct
 	About      string `faker:"sentence"`
 	Registered string `faker:"timestamp"`
-	Tags       []string
+	Tags       []string `faker:"slice_len=10,len=7"`
 	Friends    FriendStruct
-	Greeting   string `faker:"paragraph"`
+	Greeting   string `faker:"sentence"`
 }
 
 type NameStruct struct {
@@ -49,11 +50,6 @@ type FriendStruct struct {
 	Friend3  FriendDetailsStruct
 	Friend4  FriendDetailsStruct
 	Friend5  FriendDetailsStruct
-	Friend6  FriendDetailsStruct
-	Friend7  FriendDetailsStruct
-	Friend8  FriendDetailsStruct
-	Friend9  FriendDetailsStruct
-	Friend10 FriendDetailsStruct
 }
 
 type FriendDetailsStruct struct {
@@ -78,7 +74,7 @@ func GenerateDoc(destination, identifier string) (interface{}, error) {
 	}
 
 	if destination == "Rockset" {
-		doc["_id"] = formatDocId(doc_id)
+		doc["_id"] = guuid.New().String()
 		doc_id = doc_id + 1
 	}
 

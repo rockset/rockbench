@@ -114,30 +114,6 @@ func main() {
 
 	go signalHandler(signalChan, doneChan)
 
-	// Periodically read number of docs and log to output
-	go func() {
-		t := time.NewTicker(30 * time.Second)
-		defer t.Stop()
-
-		for {
-			select {
-			case <-doneChan:
-				return
-			case <-t.C:
-				latestTimestamp, err := d.GetLatestTimestamp()
-				now := time.Now()
-				latency := now.Sub(latestTimestamp)
-
-				if err == nil {
-					fmt.Printf("Latency: %s\n", latency)
-					generator.RecordE2ELatency(float64(latency.Microseconds()))
-				} else {
-					log.Printf("failed to get latest timespamp: %v", err)
-				}
-			}
-		}
-	}()
-
 	// Write function
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
