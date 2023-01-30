@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-faker/faker/v4"
+	guuid "github.com/google/uuid"
 	"math/rand"
 	"time"
 )
@@ -21,7 +22,7 @@ type DocStruct struct {
 	Address    AddressStruct
 	About      string `faker:"sentence"`
 	Registered string `faker:"timestamp"`
-	Tags       []string
+	Tags       []string `faker:"slice_len=9,len=14"`
 	Friends    FriendStruct
 	Greeting   string `faker:"paragraph"`
 }
@@ -49,11 +50,6 @@ type FriendStruct struct {
 	Friend3  FriendDetailsStruct
 	Friend4  FriendDetailsStruct
 	Friend5  FriendDetailsStruct
-	Friend6  FriendDetailsStruct
-	Friend7  FriendDetailsStruct
-	Friend8  FriendDetailsStruct
-	Friend9  FriendDetailsStruct
-	Friend10 FriendDetailsStruct
 }
 
 type FriendDetailsStruct struct {
@@ -63,7 +59,7 @@ type FriendDetailsStruct struct {
 
 var doc_id = 0
 
-func GenerateDoc(destination, identifier string) (interface{}, error) {
+func GenerateDoc(destination, identifier string, idMode string) (interface{}, error) {
 	docStruct := DocStruct{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
@@ -78,8 +74,12 @@ func GenerateDoc(destination, identifier string) (interface{}, error) {
 	}
 
 	if destination == "Rockset" {
-		doc["_id"] = formatDocId(doc_id)
-		doc_id = doc_id + 1
+		if idMode == "uuid" {
+		  doc["_id"] = guuid.New().String()
+	  } else {
+		  doc["_id"] = formatDocId(doc_id)
+		  doc_id = doc_id + 1
+	  }
 	}
 
 	doc["_event_time"] = CurrentTimeMicros()
@@ -101,11 +101,11 @@ func CurrentTimeMicros() int64 {
 	return int64(time.Nanosecond) * t.UnixNano() / int64(time.Microsecond)
 }
 
-func GenerateDocs(batchSize int, destination, identifier string) ([]interface{}, error) {
+func GenerateDocs(batchSize int, destination, identifier string, idMode string) ([]interface{}, error) {
 	var docs = make([]interface{}, batchSize, batchSize)
 
 	for i := 0; i < batchSize; i++ {
-		doc, err := GenerateDoc(destination, identifier)
+		doc, err := GenerateDoc(destination, identifier, idMode)
 		if err != nil {
 			return nil, err
 		}
