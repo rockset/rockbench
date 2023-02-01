@@ -75,7 +75,7 @@ func GenerateDoc(destination, identifier string) (interface{}, error) {
 	}
 
 	if destination == "Rockset" {
-		doc["_id"] = guuid.New().String()
+		doc["_id"] = formatDocId(doc_id)
 		doc_id = doc_id + 1
 	}
 
