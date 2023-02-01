@@ -3,6 +3,7 @@ package generator
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/brianvoe/gofakeit/v6"
 	"github.com/go-faker/faker/v4"
 	guuid "github.com/google/uuid"
 	"math/rand"
@@ -90,6 +91,70 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 	return doc, nil
 }
 
+func generateSimpleMessage(destination, identifier string) (interface{}, error) {
+	msg := map[string]interface{}{
+		"acquiring_channel":  gofakeit.RandomString([]string{"ECOMMERCE", "a"}),
+		"browser":            gofakeit.RandomString([]string{"iPhone_Safari", "Chrome", "Safari", "Android"}),
+		"channel":            "",
+		"device":             gofakeit.RandomString([]string{"Desktop", "iPhone", "Android"}),
+		"error_code":         gofakeit.RandomString([]string{"***", "INVALID_OPERATION", "INTERNAL_SERVER_ERROR", ""}),
+		"internal_status":    "payment_method_mismatch",
+		"merchant_id":        "RAM_FOOD_STAGING_TEST_STREAM_WRITER",
+		"operation":          gofakeit.RandomString([]string{"create_order", "payment_methods", ""}),
+		"partner_system":     gofakeit.RandomString([]string{"Fleet", "Bank", "oneof", ""}),
+		"payment_method":     gofakeit.RandomString([]string{"one-purchase-flow", "paypal", "strike"}),
+		"purchase_country":   gofakeit.Country(),
+		"region":             "",
+		"response_code":      gofakeit.HTTPStatusCodeSimple(),
+		"request_timestamp":  gofakeit.Date().Format(time.RFC3339Nano),
+		"acquiring_channel2": gofakeit.RandomString([]string{"ECOMMERCE", "a"}),
+		"browser2":           gofakeit.RandomString([]string{"iPhone_Safari", "Chrome", "Safari", "Android"}),
+		"channel2":           "",
+		"device2":            gofakeit.RandomString([]string{"Desktop", "iPhone", "Android"}),
+		"error_code2":        gofakeit.RandomString([]string{"***", "INVALID_OPERATION", "INTERNAL_SERVER_ERROR", ""}),
+		"internal_status2":   "payment_method_mismatch",
+		"merchant_id2":       "RAM_FOOD_STAGING_TEST_STREAM_WRITER",
+		"operation2":         gofakeit.RandomString([]string{"create_order", "payment_methods", ""}),
+		"partner_system2":    gofakeit.RandomString([]string{"Fleet", "Bank", "oneof", ""}),
+		"payment_method2":    gofakeit.RandomString([]string{"one-purchase-flow", "paypal", "strike"}),
+		"purchase_country2":  gofakeit.Country(),
+		"region2":            "",
+		"response_code2":     gofakeit.HTTPStatusCodeSimple(),
+		"request_timestamp2": gofakeit.Date().Format(time.RFC3339Nano),
+		"morefields1":        23,
+		"morefields2":        "some field",
+		"morefields3":        23,
+		"morefields4":        "some field",
+		"morefields5":        23,
+		"morefields6":        "some field",
+		"morefields7":        23,
+		"morefields8":        "some field",
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal document: %w", err)
+	}
+	
+	doc := make(map[string]interface{})
+
+	if err = json.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
+	}
+
+	if destination == "Rockset" {
+		doc["_id"] = guuid.New().String()
+		doc_id = doc_id + 1
+	}
+
+	doc["_event_time"] = CurrentTimeMicros()
+	// Set _ts as _event_time is not mutable
+	doc["_ts"] = CurrentTimeMicros()
+	doc["generator_identifier"] = identifier
+
+	return doc, nil
+}
+
 func getMaxDoc() int {
 	// doc_ids are left padded monotonic integers,
 	//this returns the highest exclusive doc id for purposes of issuing patches.
@@ -110,6 +175,7 @@ func GenerateDocs(batchSize int, destination, identifier string, idMode string) 
 
 	for i := 0; i < batchSize; i++ {
 		doc, err := GenerateDoc(destination, identifier, idMode)
+		// doc, err := generateSimpleMessage(destination, identifier)
 		if err != nil {
 			return nil, err
 		}
