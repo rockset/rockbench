@@ -105,7 +105,7 @@ func main() {
 		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
 	}
 
-	go metricListener()
+	// go metricListener()
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Kill, os.Interrupt)
