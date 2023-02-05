@@ -23,6 +23,7 @@ func main() {
 	mode := getEnvDefault("MODE", "add")
 	idMode := getEnvDefault("ID_MODE", "uuid")
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
+	collectMetrics := getEnvDefaultBool("METRICS", false)
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -109,7 +110,9 @@ func main() {
 		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
 	}
 
-	// go metricListener()
+	if (collectMetrics) {
+	   go metricListener()
+    }
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Kill, os.Interrupt)
@@ -213,6 +216,20 @@ func getEnvDefaultInt(env string, defaultValue int) int {
 	if err != nil {
 		log.Fatalf("env %s is not integer!", env)
 	}
+	return ret
+}
+
+func getEnvDefaultBool(env string, defaultValue bool) bool {
+	v, found := os.LookupEnv(env)
+	if !found {
+		return defaultValue
+	}
+
+	ret, err := strconv.ParseBool(v)
+	if err != nil {
+		log.Fatalf("env %s is not bool!", env)
+	}
+
 	return ret
 }
 
