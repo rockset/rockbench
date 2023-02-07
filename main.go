@@ -23,7 +23,8 @@ func main() {
 	mode := getEnvDefault("MODE", "add")
 	idMode := getEnvDefault("ID_MODE", "uuid")
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
-	collectMetrics := getEnvDefaultBool("METRICS", false)
+	exportMetrics := getEnvDefaultBool("EXPORT_METRICS", false)
+	trackLatency := getEnvDefaultBool("TRACK_LATENCY", false)
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -33,6 +34,10 @@ func main() {
 	}
 	if !(idMode == "uuid" || idMode == "sequential") {
 		panic("Invalid idMode specified, expecting 'uuid' or 'sequential'")
+
+		if (mode == "patch" && idMode != "sequential") {
+			panic("Patch mode supports ID_MODE `sequential` only")
+		}
 	}
 
 	pps := getEnvDefaultInt("PPS", wps)
@@ -110,7 +115,7 @@ func main() {
 		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
 	}
 
-	if (collectMetrics) {
+	if (exportMetrics) {
 	   go metricListener()
     }
 
@@ -120,6 +125,31 @@ func main() {
 	var doneChan = make(chan struct{}, 1)
 
 	go signalHandler(signalChan, doneChan)
+
+	if (trackLatency) {
+		go func() {
+			t := time.NewTicker(30 * time.Second)
+			defer t.Stop()
+
+			for {
+				select {
+				case <-doneChan:
+					return
+				case <-t.C:
+					latestTimestamp, err := d.GetLatestTimestamp()
+					now := time.Now()
+					latency := now.Sub(latestTimestamp)
+
+					if err == nil {
+						fmt.Printf("Latency: %s\n", latency)
+						generator.RecordE2ELatency(float64(latency.Microseconds()))
+					} else {
+						log.Printf("failed to get latest timespamp: %v", err)
+					}
+				}
+			}
+		}()
+	}
 
 	// Write function
 	t := time.NewTicker(time.Second)
