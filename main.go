@@ -19,15 +19,25 @@ func main() {
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := mustGetEnvString("DESTINATION")
-	num_docs := getEnvDefaultInt("NUM_DOCS", -1)
+	numDocs := getEnvDefaultInt("NUM_DOCS", -1)
 	mode := getEnvDefault("MODE", "add")
-	patch_mode := getEnvDefault("PATCH_MODE", "replace")
+	idMode := getEnvDefault("ID_MODE", "uuid")
+	patchMode := getEnvDefault("PATCH_MODE", "replace")
+	exportMetrics := getEnvDefaultBool("EXPORT_METRICS", false)
+	trackLatency := getEnvDefaultBool("TRACK_LATENCY", false)
 
-	if !(patch_mode == "replace" || patch_mode == "add") {
+	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
 	}
 	if !(mode == "add" || mode == "patch") {
 		panic("Invalid mode specified, expecting 'add' or 'patch'")
+	}
+	if !(idMode == "uuid" || idMode == "sequential") {
+		panic("Invalid idMode specified, expecting 'uuid' or 'sequential'")
+
+		if (mode == "patch" && idMode != "sequential") {
+			panic("Patch mode supports ID_MODE `sequential` only")
+		}
 	}
 
 	pps := getEnvDefaultInt("PPS", wps)
@@ -105,7 +115,9 @@ func main() {
 		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
 	}
 
-	go metricListener()
+	if (exportMetrics) {
+	   go metricListener()
+    }
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Kill, os.Interrupt)
@@ -114,35 +126,36 @@ func main() {
 
 	go signalHandler(signalChan, doneChan)
 
-	// Periodically read number of docs and log to output
-	go func() {
-		t := time.NewTicker(30 * time.Second)
-		defer t.Stop()
+	if (trackLatency) {
+		go func() {
+			t := time.NewTicker(30 * time.Second)
+			defer t.Stop()
 
-		for {
-			select {
-			case <-doneChan:
-				return
-			case <-t.C:
-				latestTimestamp, err := d.GetLatestTimestamp()
-				now := time.Now()
-				latency := now.Sub(latestTimestamp)
+			for {
+				select {
+				case <-doneChan:
+					return
+				case <-t.C:
+					latestTimestamp, err := d.GetLatestTimestamp()
+					now := time.Now()
+					latency := now.Sub(latestTimestamp)
 
-				if err == nil {
-					fmt.Printf("Latency: %s\n", latency)
-					generator.RecordE2ELatency(float64(latency.Microseconds()))
-				} else {
-					log.Printf("failed to get latest timespamp: %v", err)
+					if err == nil {
+						fmt.Printf("Latency: %s\n", latency)
+						generator.RecordE2ELatency(float64(latency.Microseconds()))
+					} else {
+						log.Printf("failed to get latest timespamp: %v", err)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// Write function
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	docs_written := 0
-	for num_docs < 0 || docs_written < num_docs {
+	for numDocs < 0 || docs_written < numDocs {
 		select {
 		// when doneChan is closed, receive immediately returns the zero value
 		case <-doneChan:
@@ -151,7 +164,7 @@ func main() {
 		case <-t.C:
 			for i := 0; i < wps; i++ {
 				// TODO: move doc generation out of this loop into a go routine that pre-generates them
-				docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier)
+				docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier, idMode)
 				if err != nil {
 					log.Printf("document generation failed: %v", err)
 					os.Exit(1)
@@ -172,8 +185,8 @@ func main() {
 			panic("Patches can only be generated for Rockset at this time")
 		}
 		patchChannel := make(chan map[string]interface{}, 1)
-		log.Printf("Sending patches in '%s' mode", patch_mode)
-		if patch_mode == "replace" {
+		log.Printf("Sending patches in '%s' mode", patchMode)
+		if patchMode == "replace" {
 			go generator.RandomFieldReplace(patchChannel)
 		} else {
 			go generator.RandomFieldAdd(patchChannel)
@@ -233,6 +246,20 @@ func getEnvDefaultInt(env string, defaultValue int) int {
 	if err != nil {
 		log.Fatalf("env %s is not integer!", env)
 	}
+	return ret
+}
+
+func getEnvDefaultBool(env string, defaultValue bool) bool {
+	v, found := os.LookupEnv(env)
+	if !found {
+		return defaultValue
+	}
+
+	ret, err := strconv.ParseBool(v)
+	if err != nil {
+		log.Fatalf("env %s is not bool!", env)
+	}
+
 	return ret
 }
 

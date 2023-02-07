@@ -42,7 +42,7 @@ func TestElastic_GetLatestTimestamp(t *testing.T) {
 func TestElastic_SendDocument(t *testing.T) {
 	r := NewElasticClient("")
 
-	docs, err := GenerateDocs(10, "Elastic", r.GeneratorIdentifier)
+	docs, err := GenerateDocs(10, "Elastic", r.GeneratorIdentifier, "sequential")
 	assert.Nil(t, err)
 	err = r.SendDocument(docs)
 	assert.Nil(t, err)

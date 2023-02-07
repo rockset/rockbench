@@ -50,6 +50,7 @@ Patches can take on various forms, currently
 
 Specify `PATCH_MODE` as either 'replace' or 'add'. Default will be 'replace'.
 
+You can also specify the `_id` scheme for Rockset destination to be either `uuid` or `sequential` (increasing sequential numbers) using `ID_MODE`
 
 ## How to extend RockBench to measure your favourite realtime database
 
