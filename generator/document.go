@@ -256,8 +256,10 @@ func genUniqueInRange(limit int, count int) []int {
 	}
 
 	ids := make([]int, count)
+	i := 0
 	for k, _ := range ids_to_patch {
-		ids = append(ids, k)
+		ids[i] = k
+		i++
 	}
 	return ids
 }
