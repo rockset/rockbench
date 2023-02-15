@@ -29,15 +29,15 @@ func main() {
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
 	}
-	if !(mode == "add" || mode == "patch") {
-		panic("Invalid mode specified, expecting 'add' or 'patch'")
+	if !(mode == "add" || mode == "patch" || mode == "both") {
+		panic("Invalid mode specified, expecting one of 'add', 'patch', 'both'")
 	}
 	if !(idMode == "uuid" || idMode == "sequential") {
 		panic("Invalid idMode specified, expecting 'uuid' or 'sequential'")
+	}
 
-		if (mode == "patch" && idMode != "sequential") {
-			panic("Patch mode supports ID_MODE `sequential` only")
-		}
+	if mode == "patch" && idMode != "sequential" {
+		panic("Patch mode supports ID_MODE `sequential` only")
 	}
 
 	pps := getEnvDefaultInt("PPS", wps)
@@ -115,9 +115,9 @@ func main() {
 		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
 	}
 
-	if (exportMetrics) {
-	   go metricListener()
-    }
+	if exportMetrics {
+		go metricListener()
+	}
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Kill, os.Interrupt)
@@ -126,7 +126,7 @@ func main() {
 
 	go signalHandler(signalChan, doneChan)
 
-	if (trackLatency) {
+	if trackLatency {
 		go func() {
 			t := time.NewTicker(30 * time.Second)
 			defer t.Stop()
@@ -152,35 +152,42 @@ func main() {
 	}
 
 	// Write function
+
+	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	docs_written := 0
-	for numDocs < 0 || docs_written < numDocs {
-		select {
-		// when doneChan is closed, receive immediately returns the zero value
-		case <-doneChan:
-			log.Printf("done")
-			os.Exit(0)
-		case <-t.C:
-			for i := 0; i < wps; i++ {
-				// TODO: move doc generation out of this loop into a go routine that pre-generates them
-				docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier, idMode)
-				if err != nil {
-					log.Printf("document generation failed: %v", err)
-					os.Exit(1)
-				}
-				go func(i int) {
-					if err := d.SendDocument(docs); err != nil {
-						log.Printf("failed to send document %d of %d: %v", i, wps, err)
+	if mode == "both" || mode == "add" {
+		for numDocs < 0 || docs_written < numDocs {
+			select {
+			// when doneChan is closed, receive immediately returns the zero value
+			case <-doneChan:
+				log.Printf("done")
+				os.Exit(0)
+			case <-t.C:
+				for i := 0; i < wps; i++ {
+					// TODO: move doc generation out of this loop into a go routine that pre-generates them
+					docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier, idMode)
+					if err != nil {
+						log.Printf("document generation failed: %v", err)
+						os.Exit(1)
 					}
-				}(i)
-				docs_written = docs_written + batchSize
+					go func(i int) {
+						if err := d.SendDocument(docs); err != nil {
+							log.Printf("failed to send document %d of %d: %v", i, wps, err)
+						}
+					}(i)
+					docs_written = docs_written + batchSize
+				}
+				// TODO: this does not guarantee that the writes have finished
 			}
-			// TODO: this does not guarantee that the writes have finished
 		}
 	}
 
-	if mode == "patch" {
+	if mode == "both" || mode == "patch" {
+		if mode == "patch" {
+			// must explicitly set number of docs so updates are applied evenly across document keys
+			generator.SetMaxDoc(numDocs)
+		}
 		if destination != "Rockset" {
 			panic("Patches can only be generated for Rockset at this time")
 		}
