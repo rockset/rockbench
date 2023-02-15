@@ -31,8 +31,8 @@ SNOWFLAKE_ACCOUNT=xxxx SNOWFLAKE_USER=xxxx SNOWFLAKE_PASSWORD=xxxx SNOWFLAKE_WAR
 
 * To run with Docker container
 ```
-docker build -t data_generator .
-docker run -e [env variable as above] data_generator
+docker build -t rockset/write_generator .
+docker run -e [env variable as above] rockset/write_generator
 ```
 
 ### Modes
