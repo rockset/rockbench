@@ -8,8 +8,8 @@ COPY . /app/
 
 RUN CGO_ENABLED=0 go build
 
-FROM scratch
+FROM alpine
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /app/generator /app
+COPY --from=builder /app/rockbench /
 
-ENTRYPOINT ["/app/generator"]
+CMD ["/rockbench"]
