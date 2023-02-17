@@ -20,8 +20,8 @@ type DocStruct struct {
 	Email      string `faker:"email"`
 	Phone      string `faker:"phone_number"`
 	Address    AddressStruct
-	About      string `faker:"sentence"`
-	Registered string `faker:"timestamp"`
+	About      string   `faker:"sentence"`
+	Registered string   `faker:"timestamp"`
 	Tags       []string `faker:"slice_len=9,len=14"`
 	Friends    FriendStruct
 	Greeting   string `faker:"paragraph"`
@@ -45,11 +45,11 @@ type CoordinatesStruct struct {
 }
 
 type FriendStruct struct {
-	Friend1  FriendDetailsStruct
-	Friend2  FriendDetailsStruct
-	Friend3  FriendDetailsStruct
-	Friend4  FriendDetailsStruct
-	Friend5  FriendDetailsStruct
+	Friend1 FriendDetailsStruct
+	Friend2 FriendDetailsStruct
+	Friend3 FriendDetailsStruct
+	Friend4 FriendDetailsStruct
+	Friend5 FriendDetailsStruct
 }
 
 type FriendDetailsStruct struct {
@@ -75,11 +75,11 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 
 	if destination == "Rockset" {
 		if idMode == "uuid" {
-		  doc["_id"] = guuid.New().String()
-	  } else {
-		  doc["_id"] = formatDocId(doc_id)
-		  doc_id = doc_id + 1
-	  }
+			doc["_id"] = guuid.New().String()
+		} else {
+			doc["_id"] = formatDocId(doc_id)
+			doc_id = doc_id + 1
+		}
 	}
 
 	doc["_event_time"] = CurrentTimeMicros()
@@ -94,6 +94,10 @@ func getMaxDoc() int {
 	// doc_ids are left padded monotonic integers,
 	//this returns the highest exclusive doc id for purposes of issuing patches.
 	return doc_id
+}
+
+func SetMaxDoc(maxDocId int) {
+	doc_id = maxDocId
 }
 
 func CurrentTimeMicros() int64 {
