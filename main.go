@@ -29,8 +29,8 @@ func main() {
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
 	}
-	if !(mode == "add" || mode == "patch" || mode == "both") {
-		panic("Invalid mode specified, expecting one of 'add', 'patch', 'both'")
+	if !(mode == "add" || mode == "patch" || mode == "add_then_patch") {
+		panic("Invalid mode specified, expecting one of 'add', 'patch', 'add_then_patch'")
 	}
 	if !(idMode == "uuid" || idMode == "sequential") {
 		panic("Invalid idMode specified, expecting 'uuid' or 'sequential'")
@@ -38,6 +38,10 @@ func main() {
 
 	if mode == "patch" && idMode != "sequential" {
 		panic("Patch mode supports ID_MODE `sequential` only")
+	}
+
+	if mode == "patch" && numDocs <= 0 {
+		panic("Patch mode requires a positive number of docs to perform patches against. Please specify a number of documents via NUM_DOCS env var.")
 	}
 
 	pps := getEnvDefaultInt("PPS", wps)
@@ -156,7 +160,7 @@ func main() {
 	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	if mode == "both" || mode == "add" {
+	if mode == "add_then_patch" || mode == "add" {
 		for numDocs < 0 || docs_written < numDocs {
 			select {
 			// when doneChan is closed, receive immediately returns the zero value
@@ -183,7 +187,7 @@ func main() {
 		}
 	}
 
-	if mode == "both" || mode == "patch" {
+	if mode == "add_then_patch" || mode == "patch" {
 		if mode == "patch" {
 			// must explicitly set number of docs so updates are applied evenly across document keys
 			generator.SetMaxDoc(numDocs)
