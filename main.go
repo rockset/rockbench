@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -124,7 +125,7 @@ func main() {
 	}
 
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Kill, os.Interrupt)
+	signal.Notify(signalChan, os.Kill, os.Interrupt, syscall.SIGTERM)
 
 	var doneChan = make(chan struct{}, 1)
 
@@ -300,6 +301,9 @@ func signalHandler(signalChan chan os.Signal, doneChan chan struct{}) {
 			os.Exit(1)
 		}
 		fmt.Printf("\nsignal received: %s\n", s)
+		if s == syscall.SIGTERM {
+			os.Exit(0)
+		}
 		done = true
 		close(doneChan)
 	}
