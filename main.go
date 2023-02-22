@@ -149,7 +149,7 @@ func main() {
 						fmt.Printf("Latency: %s\n", latency)
 						generator.RecordE2ELatency(float64(latency.Microseconds()))
 					} else {
-						log.Printf("failed to get latest timespamp: %v", err)
+						log.Printf("failed to get latest timestamp: %v", err)
 					}
 				}
 			}
