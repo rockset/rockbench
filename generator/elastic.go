@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	guuid "github.com/google/uuid"
@@ -82,7 +83,9 @@ func (e *Elastic) SendDocument(docs []any) error {
 func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	searchURL := fmt.Sprintf("%s/%s/_search?size=0", e.URL, e.IndexName)
 
-	jsonBody := fmt.Sprintf("{\"aggs\":{\"max_event_time_for_identifier\":{\"filter\":{\"term\":{\"generator_identifier\":\"%s\"}},\"aggs\":{\"max_event_time\":{\"max\":{\"field\":\"_event_time\"}}}}}}", e.GeneratorIdentifier)
+	// The identifier needs to be lowercased because by default, Elastic will index text in lowercase and the term query is case-sensitive
+	// This can be avoided using the match query, but this is slightly slower than the term query
+	jsonBody := fmt.Sprintf("{\"aggs\":{\"max_event_time_for_identifier\":{\"filter\":{\"term\":{\"generator_identifier\":\"%s\"}},\"aggs\":{\"max_event_time\":{\"max\":{\"field\":\"_event_time\"}}}}}}", strings.ToLower(e.GeneratorIdentifier))
 	req, err := http.NewRequest(http.MethodPost, searchURL, bytes.NewBufferString(jsonBody))
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to create new request: %w", err)
@@ -107,12 +110,14 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 
 	// Received status 200. Result structure will look something like
 	// {
-	// 	"aggregation" : {
+	// 	...
+	// 	"aggregations": {
 	// 		"max_event_time_for_identifier": {
-	//			"max_event_time" : {
-	//				"value": 1000000
-	//			}
-	//      }
+	// 			"doc_count": 201874000,
+	// 			"max_event_time": {
+	// 					"value": 1.677014840315018E15
+	// 			}
+	// 		}
 	// 	}
 	// }
 	bodyBytes, err := io.ReadAll(resp.Body)
