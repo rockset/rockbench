@@ -20,30 +20,29 @@ intervals.
 
 You can run this directly, or through Docker container.
 
-* Clone the repository
+- Clone the repository
 
 ```
 git clone https://github.com/rockset/rockbench.git
-cd rockbench/generator
 ```
 
-* To run directly
+- To run directly
 
 ```
 # Build
 go build
 
 # Send data to Rockset and report data latency
-ROCKSET_API_KEY=xxxx ROCKSET_COLLECTION=yyyy WPS=1 BATCH_SIZE=50 DESTINATION=Rockset ./generator
+ROCKSET_API_KEY=xxxx ROCKSET_COLLECTION=yyyy WPS=1 BATCH_SIZE=50 DESTINATION=Rockset TRACK_LATENCY=true ./rockbench
 
 # Send data to ElasticSearch and report data latency
-ELASTIC_AUTH=xxxx ELASTIC_URL=https://... ELASTIC_INDEX=index_name WPS=1 BATCH_SIZE=50 DESTINATION=Elastic ./generator
+ELASTIC_AUTH="ApiKey xxx" ELASTIC_URL=https://... ELASTIC_INDEX=index_name WPS=1 BATCH_SIZE=50 DESTINATION=Elastic TRACK_LATENCY=true ./rockbench
 
 # Send data to Snowflake and report data latency
-SNOWFLAKE_ACCOUNT=xxxx SNOWFLAKE_USER=xxxx SNOWFLAKE_PASSWORD=xxxx SNOWFLAKE_WAREHOUSE=xxxx SNOWFLAKE_DATABASE=xxxx SNOWFLAKE_STAGES3BUCKETNAME=xxxx AWS_REGION=xxxx WPS=1 BATCH_SIZE=50 DESTINATION=Snowflake ./generator
+SNOWFLAKE_ACCOUNT=xxxx SNOWFLAKE_USER=xxxx SNOWFLAKE_PASSWORD=xxxx SNOWFLAKE_WAREHOUSE=xxxx SNOWFLAKE_DATABASE=xxxx SNOWFLAKE_STAGES3BUCKETNAME=xxxx AWS_REGION=xxxx WPS=1 BATCH_SIZE=50 TRACK_LATENCY=true DESTINATION=Snowflake ./rockbench
 ```
 
-* To run with Docker container
+- To run with Docker container
 
 ```
 docker build -t rockset/write_generator .
@@ -55,7 +54,7 @@ docker run -e [env variable as above] rockset/write_generator
 RockBench can also measure the speed of patches.
 
 | mode           | operation                                                |
-|----------------|----------------------------------------------------------|
+| -------------- | -------------------------------------------------------- |
 | add            | Perform strictly inserts (using either id scheme)        |
 | patch          | Perform patches on id range specified from [0, NUM_DOCS) |
 | add_then_patch | Perform add mode then patch mode                         |
@@ -86,8 +85,8 @@ Check [Rockset](https://github.com/rockset/rockbench/blob/master/generator/rocks
 and [Elastic](https://github.com/rockset/rockbench/blob/master/generator/elastic.go) for reference. The interface has
 two methods:
 
-* `SendDocument`: Method to send batch of documents to the destination
-* `GetLatestTimestamp`: Fetch the latest timestamp from the database
+- `SendDocument`: Method to send batch of documents to the destination
+- `GetLatestTimestamp`: Fetch the latest timestamp from the database
 
 Once the new source is implemented, handle it
 in [main.go](https://github.com/rockset/rockbench/blob/master/generator/main.go).
