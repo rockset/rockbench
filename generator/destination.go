@@ -53,7 +53,7 @@ func recordPatchesErrored(count float64) {
 
 var (
 	// More info can found here: https://godoc.org/github.com/prometheus/client_golang/prometheus#NewSummary
-	objectiveMap = map[float64]float64{0.5: 0.05, 0.95: 0.005}
+	objectiveMap = map[float64]float64{0.5: 0.05, 0.95: 0.005, 0.99: 0.001}
 
 	writesCompleted = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "writes_completed",
