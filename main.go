@@ -139,8 +139,8 @@ func main() {
 
 	if trackLatency {
 		go func() {
-			// On average, send a request every 30s
-			pollDuration := replicas * 30
+			// On average, send a request every 25s
+			pollDuration := replicas * 25
 			// Sleep a random amount to space requests out between each other
 			sleepDuration := rand.Int31n(int32(pollDuration))
 			fmt.Printf("Initial sleep of %ds and polling period of %ds\n", sleepDuration, pollDuration)

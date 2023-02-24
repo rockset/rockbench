@@ -23,13 +23,12 @@ type Rockset struct {
 func (r *Rockset) SendDocument(docs []any) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
-	numBytes := 0
 
 	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated to have two components
 	URL := fmt.Sprintf("%s/v1/orgs/self/ws/%s/collections/%s/docs", r.APIServer, rcollection[0], rcollection[1])
 	body := map[string][]interface{}{"data": docs}
 	jsonBody, _ := json.Marshal(body)
-	numBytes += len(jsonBody)
+	numBytes := len(jsonBody)
 	req, _ := http.NewRequest(http.MethodPost, URL, bytes.NewBuffer(jsonBody))
 	req.Header.Add("Authorization", fmt.Sprintf("ApiKey %s", r.APIKey))
 	req.Header.Add("Content-Type", "application/json")
