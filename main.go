@@ -154,6 +154,9 @@ func main() {
 			}
 
 			fmt.Printf("Sleep done. Now issuing requests to calculate e2e latency.\n")
+			// Initial request before sleeping
+			getE2ELatency(d)
+
 			t := time.NewTicker(time.Duration(pollDuration) * time.Second)
 			defer t.Stop()
 
@@ -162,16 +165,7 @@ func main() {
 				case <-doneChan:
 					return
 				case <-t.C:
-					latestTimestamp, err := d.GetLatestTimestamp()
-					now := time.Now()
-					latency := now.Sub(latestTimestamp)
-
-					if err == nil {
-						fmt.Printf("Latency: %s\n", latency)
-						generator.RecordE2ELatency(float64(latency.Microseconds()))
-					} else {
-						log.Printf("failed to get latest timestamp: %v", err)
-					}
+					getE2ELatency(d)
 				}
 			}
 		}()
@@ -247,6 +241,19 @@ func main() {
 			}
 
 		}
+	}
+}
+
+func getE2ELatency(d generator.Destination) {
+	latestTimestamp, err := d.GetLatestTimestamp()
+	now := time.Now()
+	latency := now.Sub(latestTimestamp)
+
+	if err == nil {
+		fmt.Printf("Latency: %s\n", latency)
+		generator.RecordE2ELatency(float64(latency.Microseconds()))
+	} else {
+		log.Printf("failed to get latest timestamp: %v", err)
 	}
 }
 
