@@ -29,6 +29,9 @@ func main() {
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
 	exportMetrics := getEnvDefaultBool("EXPORT_METRICS", false)
 	trackLatency := getEnvDefaultBool("TRACK_LATENCY", false)
+	// Used to dynamically adjust the period between latency calculations to keep the number of queries roughly the same.
+	// Ex. If we want 1 query per 30s and we have 2 replicas, the polling period should be 2 * 30s=60s.
+	replicas := getEnvDefaultInt("REPLICAS", 2)
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -136,8 +139,9 @@ func main() {
 
 	if trackLatency {
 		go func() {
-			// Space requests over period of pollDuration to avoid sending concurrent queries
-			pollDuration := 300
+			// On average, send a request every 30s
+			pollDuration := replicas * 30
+			// Sleep a random amount to space requests out between each other
 			sleepDuration := rand.Int31n(int32(pollDuration))
 			fmt.Printf("Initial sleep of %ds and polling period of %ds\n", sleepDuration, pollDuration)
 			timer := time.NewTimer(time.Duration(sleepDuration) * time.Second)
