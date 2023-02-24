@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +18,8 @@ import (
 )
 
 func main() {
+	// Seed so that values are random across replicas
+	rand.Seed(time.Now().UnixNano())
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := mustGetEnvString("DESTINATION")
@@ -133,7 +136,21 @@ func main() {
 
 	if trackLatency {
 		go func() {
-			t := time.NewTicker(30 * time.Second)
+			// Space requests over period of pollDuration to avoid sending concurrent queries
+			pollDuration := 300
+			sleepDuration := rand.Int31n(int32(pollDuration))
+			fmt.Printf("Initial sleep of %ds and polling period of %ds\n", sleepDuration, pollDuration)
+			timer := time.NewTimer(time.Duration(sleepDuration) * time.Second)
+			defer timer.Stop()
+			
+			select {
+			case <-doneChan:
+				return
+			case <-timer.C:
+			}
+
+			fmt.Printf("Sleep done. Now issuing requests to calculate e2e latency.\n")
+			t := time.NewTicker(time.Duration(pollDuration) * time.Second)
 			defer t.Stop()
 
 			for {
@@ -178,7 +195,7 @@ func main() {
 					}
 					go func(i int) {
 						if err := d.SendDocument(docs); err != nil {
-							log.Printf("failed to send document %d of %d: %v", i, wps, err)
+							log.Printf("failed to send document batch %d of %d (wps): %v", i, wps, err)
 						}
 					}(i)
 					docs_written = docs_written + batchSize
