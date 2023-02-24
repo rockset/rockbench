@@ -30,6 +30,7 @@ func (j *Elastic) SendPatch(docs []interface{}) error {
 // SendDocument sends a batch of documents to Rockset
 func (e *Elastic) SendDocument(docs []any) error {
 	numDocs := len(docs)
+	numBytes := 0
 	numEventIngested.Add(float64(numDocs))
 	var builder bytes.Buffer
 	for i := 0; i < len(docs); i++ {
@@ -52,6 +53,8 @@ func (e *Elastic) SendDocument(docs []any) error {
 		builder.WriteByte('\n')
 		builder.Write(line)
 		builder.WriteByte('\n')
+		// Add bytes from doc payload
+		numBytes += len(line)
 	}
 
 	body := builder.Bytes()
@@ -76,6 +79,7 @@ func (e *Elastic) SendDocument(docs []any) error {
 		return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 	recordWritesCompleted(float64(numDocs))
+	recordBytesSentAndCompleted(float64(numBytes))
 	return nil
 }
 

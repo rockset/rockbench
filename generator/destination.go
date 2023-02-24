@@ -51,6 +51,10 @@ func recordPatchesErrored(count float64) {
 	patchesErrored.Add(count)
 }
 
+func recordBytesSentAndCompleted(bytes float64) {
+	bytes_completed.Add(bytes)
+}
+
 var (
 	// More info can found here: https://godoc.org/github.com/prometheus/client_golang/prometheus#NewSummary
 	objectiveMap = map[float64]float64{0.5: 0.05, 0.95: 0.005, 0.99: 0.001}
@@ -73,6 +77,11 @@ var (
 	patchesErrored = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "patches_errored",
 		Help: "The total number of patches errored",
+	})
+
+	bytes_completed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "bytes_completed",
+		Help: "The total number of bytes sent through writes or patches that completed successfully",
 	})
 
 	e2eLatencies = promauto.NewGauge(prometheus.GaugeOpts{
