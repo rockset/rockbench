@@ -251,15 +251,15 @@ func main() {
 			// must explicitly set number of docs so updates are applied evenly across document keys
 			generator.SetMaxDoc(numDocs)
 		}
-		if destination != "rockset" {
-			panic("Patches can only be generated for Rockset at this time")
+		if destination != "rockset" && destination != "elastic" {
+			panic("Patches can only be generated for Rockset or elastic at this time")
 		}
 		patchChannel := make(chan map[string]interface{}, 1)
 		log.Printf("Sending patches in '%s' mode", patchMode)
 		if patchMode == "replace" {
-			go generator.RandomFieldReplace(patchChannel)
+			go generator.RandomFieldReplace(destination, patchChannel)
 		} else {
-			go generator.RandomFieldAdd(patchChannel)
+			go generator.RandomFieldAdd(destination, patchChannel)
 		}
 		for {
 			select {
@@ -269,7 +269,7 @@ func main() {
 				os.Exit(0)
 			case <-t.C:
 				for i := 0; i < pps; i++ {
-					docs, err := generator.GeneratePatches(batchSize, patchChannel)
+					docs, err := generator.GeneratePatches(batchSize, destination, patchChannel)
 					if err != nil {
 						log.Printf("patch generation failed: %v", err)
 						os.Exit(1)

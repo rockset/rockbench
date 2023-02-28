@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	guuid "github.com/google/uuid"
 )
 
 // Elastic contains all configurations needed to send documents to Elastic
@@ -22,25 +20,87 @@ type Elastic struct {
 	GeneratorIdentifier string
 }
 
-func (j *Elastic) SendPatch(docs []interface{}) error {
-	//TODO implement me
-	panic("implement me")
+func (e *Elastic) SendPatch(docs []interface{}) error {
+	numDocs := len(docs)
+	numEventIngested.Add(float64(numDocs))
+	var builder bytes.Buffer
+	for i := 0; i < len(docs); i++ {
+		mdoc, errb := docs[i].(map[string]interface{})
+		if !errb {
+			return fmt.Errorf("document is not a map of string to interface")
+		}
+
+		index := make(map[string]interface{})
+		index["_index"] = e.IndexName
+		index["_id"] = mdoc["_id"]
+
+		line, err := json.Marshal(mdoc["patch"])
+		if err != nil {
+			return fmt.Errorf("failed to marshal document: %w", err)
+		}
+
+		ret := make(map[string]interface{})
+		ret["update"] = index
+		metaLine, err := json.Marshal(ret)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request: %w", err)
+		}
+
+		builder.Write(metaLine)
+		builder.WriteByte('\n')
+		builder.Write(line)
+		builder.WriteByte('\n')
+	}
+
+	body := builder.Bytes()
+	bulkURL := e.URL + "/_bulk"
+	elasticHTTPRequest, _ := http.NewRequest(http.MethodPost, bulkURL, bytes.NewBuffer(body))
+	elasticHTTPRequest.Header.Add("Authorization", e.Auth)
+	elasticHTTPRequest.Header.Add("Content-Type", "application/x-ndjson")
+
+	resp, err := e.Client.Do(elasticHTTPRequest)
+	if err != nil {
+		recordPatchesErrored(float64(numDocs))
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer deferredErrorCloser(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		recordPatchesErrored(float64(numDocs))
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body: %w", err)
+		}
+		return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+	// fmt.Println("doc sent!")
+	recordPatchesCompleted(float64(numDocs))
+	return nil
+
 }
 
-// SendDocument sends a batch of documents to Rockset
+// SendDocument sends a batch of documents to Elastic
 func (e *Elastic) SendDocument(docs []any) error {
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 	var builder bytes.Buffer
 	for i := 0; i < len(docs); i++ {
-		line, err := json.Marshal(docs[i])
-		if err != nil {
-			return fmt.Errorf("failed to marshal document: %w", err)
+		mdoc, errb := docs[i].(map[string]interface{})
+		if !errb {
+			return fmt.Errorf("document is not a map of string to interface")
 		}
 
 		index := make(map[string]interface{})
 		index["_index"] = e.IndexName
-		index["_id"] = guuid.New().String()
+		index["_id"] = mdoc["_id"]
+		// "_id" is not allowed in the doc
+		delete(mdoc, "_id")
+
+		line, err := json.Marshal(mdoc)
+		if err != nil {
+			return fmt.Errorf("failed to marshal document: %w", err)
+		}
+
 		ret := make(map[string]interface{})
 		ret["index"] = index
 		metaLine, err := json.Marshal(ret)
