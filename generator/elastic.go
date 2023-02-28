@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"math/rand"
 	"time"
-
-	guuid "github.com/google/uuid"
 )
+
+var edoc_id = 0
 
 // Elastic contains all configurations needed to send documents to Elastic
 type Elastic struct {
@@ -21,13 +22,8 @@ type Elastic struct {
 	GeneratorIdentifier string
 }
 
-func (j *Elastic) SendPatch(docs []interface{}) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-// SendDocument sends a batch of documents to Rockset
-func (e *Elastic) SendDocument(docs []any) error {
+func (e *Elastic) SendPatch(docs []interface{}) error {
+	random := rand.New(rand.NewSource(CurrentTimeMicros()))
 	numDocs := len(docs)
 	numEventIngested.Add(float64(numDocs))
 	var builder bytes.Buffer
@@ -39,9 +35,10 @@ func (e *Elastic) SendDocument(docs []any) error {
 
 		index := make(map[string]interface{})
 		index["_index"] = e.IndexName
-		index["_id"] = guuid.New().String()
+		index["_id"] = random.Intn(getMaxDoc())
+
 		ret := make(map[string]interface{})
-		ret["index"] = index
+		ret["update"] = index
 		metaLine, err := json.Marshal(ret)
 		if err != nil {
 			return fmt.Errorf("failed to marshal request: %w", err)
@@ -75,6 +72,65 @@ func (e *Elastic) SendDocument(docs []any) error {
 		return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 	recordWritesCompleted(float64(numDocs))
+	return nil
+
+}
+
+func eFormatDocId(id int) string {
+	return fmt.Sprintf("%024d", id)
+}
+
+// SendDocument sends a batch of documents to Rockset
+func (e *Elastic) SendDocument(docs []any) error {
+	numDocs := len(docs)
+	numEventIngested.Add(float64(numDocs))
+	var builder bytes.Buffer
+	for i := 0; i < len(docs); i++ {
+		line, err := json.Marshal(docs[i])
+		if err != nil {
+			return fmt.Errorf("failed to marshal document: %w", err)
+		}
+
+		index := make(map[string]interface{})
+		index["_index"] = e.IndexName
+		index["_id"] = eFormatDocId(edoc_id)
+		edoc_id = edoc_id + 1
+
+		ret := make(map[string]interface{})
+		ret["index"] = index
+		metaLine, err := json.Marshal(ret)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request: %w", err)
+		}
+
+		builder.Write(metaLine)
+		builder.WriteByte('\n')
+		builder.Write(line)
+		builder.WriteByte('\n')
+	}
+
+	body := builder.Bytes()
+	bulkURL := e.URL + "/_bulk"
+	elasticHTTPRequest, _ := http.NewRequest(http.MethodPost, bulkURL, bytes.NewBuffer(body))
+	elasticHTTPRequest.Header.Add("Authorization", e.Auth)
+	elasticHTTPRequest.Header.Add("Content-Type", "application/x-ndjson")
+
+	resp, err := e.Client.Do(elasticHTTPRequest)
+	if err != nil {
+		recordPatchesErrored(float64(numDocs))
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer deferredErrorCloser(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		recordPatchesErrored(float64(numDocs))
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body: %w", err)
+		}
+		return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+	recordPatchesCompleted(float64(numDocs))
 	return nil
 }
 

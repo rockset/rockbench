@@ -150,9 +150,9 @@ func main() {
 		patchChannel := make(chan map[string]interface{}, 1)
 		log.Printf("Sending patches in '%s' mode", patch_mode)
 		if patch_mode == "replace" {
-			go generator.RandomFieldReplace(patchChannel)
+			go generator.RandomFieldReplace(destination, patchChannel)
 		} else {
-			go generator.RandomFieldAdd(patchChannel)
+			go generator.RandomFieldAdd(destination, patchChannel)
 		}
 		for {
 			select {
@@ -162,7 +162,7 @@ func main() {
 				os.Exit(0)
 			case <-t.C:
 				for i := 0; i < pps; i++ {
-					docs, err := generator.GeneratePatches(batchSize, patchChannel)
+					docs, err := generator.GeneratePatches(batchSize, destination, patchChannel)
 					if err != nil {
 						log.Printf("patch generation failed: %v", err)
 						os.Exit(1)

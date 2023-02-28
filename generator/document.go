@@ -187,46 +187,73 @@ func RandomString(n int) string {
 	return string(s)
 }
 
-func GeneratePatches(num_patch int, c chan map[string]interface{}) ([]interface{}, error) {
-	ids_to_patch := genUniqueInRange(getMaxDoc(), num_patch)
+func GeneratePatches(num_patch int, destination string, c chan map[string]interface{}) ([]interface{}, error) {
 	patches := make([]interface{}, 0)
 
-	for _, id := range ids_to_patch {
-		patch := generatePatch(id, <-c)
-		patches = append(patches, patch)
-	}
+	if (destination == "elastic") {
+		for i:=0; i < num_patch; i++ {
+			patch := generateEPatch(<-c)
+			patches = append(patches, patch)
+		}
+	} else {
+		ids_to_patch := genUniqueInRange(getMaxDoc(), num_patch)
+		for _, id := range ids_to_patch {
+			patch := generatePatch(id, <-c)
+			patches = append(patches, patch)
+		}
 
+	}
 	return patches, nil
 }
 
-func RandomFieldAdd(c chan map[string]interface{}) {
+func RandomFieldAdd(destination string, c chan map[string]interface{}) {
 	// Adding fields or array members
 	for {
-		options := []map[string]interface{}{{
-			"op":    "add",
-			"path":  "/" + faker.UUIDDigit(),
-			"value": faker.Email(),
-		},
-			{
+		if (destination == "Rockset") {
+			options := []map[string]interface{}{{
+				"op":    "add",
+				"path":  "/" + faker.UUIDDigit(),
+				"value": faker.Email(),
+				},
+				{
 				"op":    "add",
 				"path":  "/Tags/-",
 				"value": faker.UUIDHyphenated(), // Append to tags array
-			},
+				},
+			}
+			shuffleAndFillChannel(options, c)
+		} else if (destination == "elastic") {
+			options := []map[string]interface{}{{
+					"doc": map[string]interface{}{
+						faker.UUIDDigit(): faker.Email(),
+						"_ts": CurrentTimeMicros(),
+					},
+				},
+				{
+					"script": map[string]interface{}{
+						"source": "ctx._source.Tags.add(params.tag)",
+						"params": map[string]interface{}{
+							"tag": faker.UUIDHyphenated(),
+							"_ts": CurrentTimeMicros(),
+						},
+					},
+				},
+			}
+			shuffleAndFillChannel(options, c)
 		}
-		shuffleAndFillChannel(options, c)
 	}
-
 }
 
-func RandomFieldReplace(c chan map[string]interface{}) {
+func RandomFieldReplace(destination string, c chan map[string]interface{}) {
 	// Purely replacement of fields
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		options := []map[string]interface{}{{
-			"op":    "replace",
-			"path":  "/Email",
-			"value": faker.Email(),
-		},
+		if (destination == "Rockset") {
+			options := []map[string]interface{}{{
+				"op":    "replace",
+				"path":  "/Email",
+				"value": faker.Email(),
+			},
 			{
 				"op":    "replace",
 				"path":  "/About",
@@ -302,7 +329,128 @@ func RandomFieldReplace(c chan map[string]interface{}) {
 				"path":  "/Address/City",
 				"value": faker.Word(),
 			}}
-		shuffleAndFillChannel(options, c)
+			shuffleAndFillChannel(options, c)
+		} else if (destination == "elastic") {
+			options := []map[string]interface{}{{
+				"doc": map[string]interface{}{
+					"Email": faker.Email(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"About": faker.Sentence(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Company": faker.Word() + "-" + faker.Word(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"script" : "ctx._source.Name = updated_nested_first_name; ctx._source._ts = ts",
+				"params" : map[string]interface{}{
+					"updated_nested_about" : map[string]interface{}{
+						"First": faker.FirstName(),
+					},
+					"ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"script" : "ctx._source.Name = updated_nested_last_name; ctx._source._ts = ts",
+				"params" : map[string]interface{}{
+					"updated_nested_about" : map[string]interface{}{
+							"Last": faker.LastName(),
+					},
+					"ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Age": random.Intn(100),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Balance": random.Float64(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Registered": faker.Timestamp(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Phone": faker.Phonenumber(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Picture": faker.UUIDDigit(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Guid": faker.UUIDHyphenated(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"doc": map[string]interface{}{
+					"Greeting": faker.Paragraph(),
+					"_ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"script" : "ctx._source.Address = updated_nested_zcode; ctx._source._ts = ts",
+				"params" : map[string]interface{}{
+					"updated_nested_coord_zcode": map[string]interface{}{
+						"ZipCode": random.Intn(100000),
+					},
+					"ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"script" : "ctx._source.Address = updated_nested_coord_long; ctx._source._ts = ts",
+				"params" : map[string]interface{}{
+					"updated_nested_coord_long": map[string]interface{}{
+						"Coordinates": map[string]interface{}{
+							"Longitude": faker.Longitude(),
+						},
+					},
+					"ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"script" : "ctx._source.Address = updated_nested_coord_lat; ctx._source._ts = ts",
+				"params" : map[string]interface{}{
+					"updated_nested_coord_lat": map[string]interface{}{
+						"Coordinates": map[string]interface{}{
+							"Latitude": faker.Latitude(),
+						},
+					},
+					"ts": CurrentTimeMicros(),
+				},
+			},
+			{
+				"script" : "ctx._source.Address = updated_nested_city; ctx._source._ts = ts",
+				"params" : map[string]interface{}{
+					"updated_nested_coord_lat": map[string]interface{}{
+						"City": faker.Word(),
+					},
+					"ts": CurrentTimeMicros(),
+				},
+			}}
+			shuffleAndFillChannel(options, c)
+		}
 	}
 }
 
@@ -330,6 +478,10 @@ func generatePatch(id int, field_patch map[string]interface{}) map[string]interf
 	add_op := []map[string]interface{}{field_patch, {"op": "add", "path": "/_ts", "value": CurrentTimeMicros()}}
 	patch["patch"] = add_op
 	return patch
+}
+
+func generateEPatch(field_patch map[string]interface{}) map[string]interface{} {
+	return field_patch
 }
 
 func shuffleAndFillChannel(options []map[string]interface{}, c chan map[string]interface{}) {
