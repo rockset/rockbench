@@ -3,11 +3,69 @@ package generator
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-faker/faker/v4"
-	guuid "github.com/google/uuid"
 	"math/rand"
 	"time"
+
+	"github.com/go-faker/faker/v4"
+	guuid "github.com/google/uuid"
 )
+
+// Multiple string, number/float, boolean, object
+// 2kb size message
+type DocStructDouble struct {
+	Guid       string
+	Balance1    float64 `faker:"amount"`
+	Balance2    float64 `faker:"amount"`
+	Balance3    float64 `faker:"amount"`
+	Balance4    float64 `faker:"amount"`
+	Balance5    float64 `faker:"amount"`
+	Balance6    float64 `faker:"amount"`
+	Balance7    float64 `faker:"amount"`
+	Balance8    float64 `faker:"amount"`
+	Balance9    float64 `faker:"amount"`
+	Balance10    float64 `faker:"amount"`
+	Email1      string `faker:"email"`
+	Email2      string `faker:"email"`
+	Email3      string `faker:"email"`
+	Email4      string `faker:"email"`
+	Email5      string `faker:"email"`
+	Email6      string `faker:"email"`
+	Email7      string `faker:"email"`
+	Email8      string `faker:"email"`
+	Email9      string `faker:"email"`
+	Email10      string `faker:"email"`
+	Phone1      string `faker:"phone_number"`
+	Phone2      string `faker:"phone_number"`
+	Phone3      string `faker:"phone_number"`
+	Phone4      string `faker:"phone_number"`
+	Phone5      string `faker:"phone_number"`
+	Phone6      string `faker:"phone_number"`
+	Phone7      string `faker:"phone_number"`
+	Phone8      string `faker:"phone_number"`
+	Phone9      string `faker:"phone_number"`
+	Phone10      string `faker:"phone_number"`
+	Boolean1   bool
+	Boolean2   bool
+	Boolean3   bool
+	Boolean4   bool
+	Boolean5   bool
+	Boolean6   bool
+	Boolean7   bool
+	Boolean8   bool
+	Boolean9   bool
+	Boolean10   bool
+	Address1    AddressStruct
+	Address2    AddressStruct
+	Address3    AddressStruct
+	Address4    AddressStruct
+	Address5    AddressStruct
+	Name1       NameStruct
+	Name2       NameStruct
+	Name3       NameStruct
+	Name4       NameStruct
+	Name5       NameStruct
+	Tags1       []string `faker:"slice_len=9,len=14"`
+}
 
 type DocStruct struct {
 	Guid       string
@@ -58,9 +116,10 @@ type FriendDetailsStruct struct {
 }
 
 var doc_id = 0
+var max_doc_id = 0
 
 func GenerateDoc(destination, identifier string, idMode string) (interface{}, error) {
-	docStruct := DocStruct{}
+	docStruct := DocStructDouble{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate fake document: %w", err)
@@ -76,8 +135,18 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 	if destination == "Rockset" {
 		if idMode == "uuid" {
 			doc["_id"] = guuid.New().String()
-		} else {
+		} else if idMode == "sequential"{
 			doc["_id"] = formatDocId(doc_id)
+			doc_id = doc_id + 1
+		} else { // upsert
+			// Insert new document every 10 docs
+			if doc_id % 10 == 0 {
+				doc["_id"] = formatDocId(getMaxDoc())
+				SetMaxDoc(getMaxDoc()+1)
+			} else {
+				// Choose random id from one already existing doc id
+				doc["_id"] = formatDocId(rand.Intn(getMaxDoc()))
+			}
 			doc_id = doc_id + 1
 		}
 	}
@@ -93,11 +162,12 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 func getMaxDoc() int {
 	// doc_ids are left padded monotonic integers,
 	//this returns the highest exclusive doc id for purposes of issuing patches.
-	return doc_id
+	return max_doc_id
 }
 
 func SetMaxDoc(maxDocId int) {
-	doc_id = maxDocId
+	// doc_id = maxDocId
+	max_doc_id = maxDocId
 }
 
 func CurrentTimeMicros() int64 {
@@ -261,7 +331,7 @@ func genUniqueInRange(limit int, count int) []int {
 
 	ids := make([]int, count)
 	i := 0
-	for k, _ := range ids_to_patch {
+	for k := range ids_to_patch {
 		ids[i] = k
 		i++
 	}
