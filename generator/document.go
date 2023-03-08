@@ -174,8 +174,8 @@ func GenerateDocs(batchSize int, destination, identifier string, idMode string) 
 	var docs = make([]interface{}, batchSize, batchSize)
 
 	for i := 0; i < batchSize; i++ {
-		doc, err := GenerateDoc(destination, identifier, idMode)
-		// doc, err := generateSimpleMessage(destination, identifier)
+		// doc, err := GenerateDoc(destination, identifier, idMode)
+		doc, err := generateSimpleMessage(destination, identifier)
 		if err != nil {
 			return nil, err
 		}
