@@ -24,6 +24,7 @@ func main() {
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := strings.ToLower(mustGetEnvString("DESTINATION"))
 	numDocs := getEnvDefaultInt("NUM_DOCS", -1)
+	maxDocs := getEnvDefaultInt("MAX_DOCS", -1) // Used for upserts to update existing collections
 	mode := getEnvDefault("MODE", "add")
 	idMode := getEnvDefault("ID_MODE", "uuid")
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
@@ -38,10 +39,10 @@ func main() {
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
 	}
-	if !(mode == "add" || mode == "patch" || mode == "add_then_patch") {
+	if !(mode == "add" || mode == "patch" || mode == "add_then_patch" || mode == "upsert") {
 		panic("Invalid mode specified, expecting one of 'add', 'patch', 'add_then_patch'")
 	}
-	if !(idMode == "uuid" || idMode == "sequential") {
+	if !(idMode == "uuid" || idMode == "sequential" || idMode == "upsert") {
 		panic("Invalid idMode specified, expecting 'uuid' or 'sequential'")
 	}
 
@@ -177,7 +178,14 @@ func main() {
 	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	if mode == "add_then_patch" || mode == "add" {
+	if mode == "add_then_patch" || mode == "add" || mode == "upsert"{
+		if mode == "upsert" {
+			// must explicitly set number of docs so updates are applied evenly across document keys
+			if maxDocs <= 0 {
+				panic("Upsert mode requires a positive number of existing docs to perform updates against. Please specify a number of documents via MAX_DOCS env var.")
+			}
+			generator.SetMaxDoc(maxDocs)
+		}
 		for numDocs < 0 || docs_written < numDocs {
 			select {
 			// when doneChan is closed, receive immediately returns the zero value
