@@ -37,10 +37,10 @@ func main() {
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
 	}
-	if !(mode == "add" || mode == "patch" || mode == "add_then_patch" || mode == "upsert") {
-		panic("Invalid mode specified, expecting one of 'add', 'patch', 'add_then_patch'")
+	if !(mode == "add" || mode == "patch" || mode == "add_then_patch" || mode == "mixed") {
+		panic("Invalid mode specified, expecting one of 'add', 'patch', 'add_then_patch', 'mixed'")
 	}
-	if !(idMode == "uuid" || idMode == "sequential" || idMode == "upsert") {
+	if !(idMode == "uuid" || idMode == "sequential") {
 		panic("Invalid idMode specified, expecting 'uuid' or 'sequential'")
 	}
 
@@ -50,6 +50,18 @@ func main() {
 
 	if mode == "patch" && numDocs <= 0 {
 		panic("Patch mode requires a positive number of docs to perform patches against. Please specify a number of documents via NUM_DOCS env var.")
+	}
+
+	if mode == "mixed" {
+		if idMode != "sequential" {
+			panic("`mixed` MODE supports ID_MODE `sequential` only")
+		}
+		if updatePercentage < 0 || updatePercentage > 100 {
+			panic("`mixed` MODE requires a positive number between 0 and 100. Please specify the percentage of documents to be updates via UPDATE_PERCENTAGE env var")
+		}
+		if maxDocs <= 0 {
+			panic("`mixed` MODE requires a positive number for MAX_DOCS. This tracks the maximum doc id in the collection and can be used to continue adding document ids sequentially. If no documents exist, specify 1")
+		}
 	}
 
 	pps := getEnvDefaultInt("PPS", wps)
@@ -176,12 +188,8 @@ func main() {
 	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	if mode == "add_then_patch" || mode == "add" || mode == "upsert"{
-		if mode == "upsert" {
-			// must explicitly set number of docs so updates are applied evenly across document keys
-			if maxDocs <= 0 {
-				panic("Upsert mode requires a positive number of existing docs to perform updates against. Please specify a number of documents via MAX_DOCS env var.")
-			}
+	if mode == "add_then_patch" || mode == "add" || mode == "mixed"{
+		if mode == "mixed" {
 			generator.SetMaxDoc(maxDocs)
 		}
 		for numDocs < 0 || docs_written < numDocs {
@@ -193,7 +201,7 @@ func main() {
 			case <-t.C:
 				for i := 0; i < wps; i++ {
 					// TODO: move doc generation out of this loop into a go routine that pre-generates them
-					docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier, idMode)
+					docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier, mode, idMode)
 					if err != nil {
 						log.Printf("document generation failed: %v", err)
 						os.Exit(1)

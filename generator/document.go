@@ -118,7 +118,7 @@ type FriendDetailsStruct struct {
 var doc_id = 0
 var max_doc_id = 0
 
-func GenerateDoc(destination, identifier string, idMode string) (interface{}, error) {
+func GenerateDoc(destination, identifier string, mode string, idMode string) (interface{}, error) {
 	docStruct := DocStructDouble{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
@@ -132,13 +132,8 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
 	}
 
-	if destination == "Rockset" {
-		if idMode == "uuid" {
-			doc["_id"] = guuid.New().String()
-		} else if idMode == "sequential"{
-			doc["_id"] = formatDocId(doc_id)
-			doc_id = doc_id + 1
-		} else { // upsert
+	if destination == "rockset" {
+		if mode == "mixed" {
 			// Insert new document every 10 docs
 			if doc_id % 10 == 0 {
 				doc["_id"] = formatDocId(getMaxDoc())
@@ -148,6 +143,14 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 				doc["_id"] = formatDocId(rand.Intn(getMaxDoc()))
 			}
 			doc_id = doc_id + 1
+		// All other modes
+		} else if idMode == "uuid" {
+			doc["_id"] = guuid.New().String()
+		} else if idMode == "sequential"{
+			doc["_id"] = formatDocId(doc_id)
+			doc_id = doc_id + 1
+		} else {
+			panic(fmt.Sprintf("Unsupported generateDoc case: %s", idMode))
 		}
 	}
 
@@ -175,11 +178,11 @@ func CurrentTimeMicros() int64 {
 	return int64(time.Nanosecond) * t.UnixNano() / int64(time.Microsecond)
 }
 
-func GenerateDocs(batchSize int, destination, identifier string, idMode string) ([]interface{}, error) {
+func GenerateDocs(batchSize int, destination, identifier string, mode string, idMode string) ([]interface{}, error) {
 	var docs = make([]interface{}, batchSize, batchSize)
 
 	for i := 0; i < batchSize; i++ {
-		doc, err := GenerateDoc(destination, identifier, idMode)
+		doc, err := GenerateDoc(destination, identifier, mode, idMode)
 		if err != nil {
 			return nil, err
 		}

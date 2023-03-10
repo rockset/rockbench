@@ -3,11 +3,12 @@ package generator
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func NewElasticClient(result string) *Elastic {
@@ -42,7 +43,7 @@ func TestElastic_GetLatestTimestamp(t *testing.T) {
 func TestElastic_SendDocument(t *testing.T) {
 	r := NewElasticClient("")
 
-	docs, err := GenerateDocs(10, "Elastic", r.GeneratorIdentifier, "sequential")
+	docs, err := GenerateDocs(10, "Elastic", r.GeneratorIdentifier, "add", "sequential")
 	assert.Nil(t, err)
 	err = r.SendDocument(docs)
 	assert.Nil(t, err)
