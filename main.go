@@ -73,6 +73,14 @@ func main() {
 		}
 	}
 
+	if hotClusterPercentage > 0 && numClusters < 0 {
+		panic("NUM_CLUSTERS must be specified if HOT_CLUSTER_PERCENTAGE is provided.")
+	}
+
+	if hotClusterPercentage == 0 || hotClusterPercentage > 100 || numClusters == 0 {
+		panic("NUM_CLUSTERS must be a positive number and HOT_CLUSTER_PERCENTAGE must be greater than 0 and less than or equal to 100 if specified.")
+	}
+
 	pps := getEnvDefaultInt("PPS", wps)
 	defaultRoundTripper := http.DefaultTransport
 	defaultTransportPointer, ok := defaultRoundTripper.(*http.Transport)
