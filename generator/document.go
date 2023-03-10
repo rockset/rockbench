@@ -10,6 +10,17 @@ import (
 	guuid "github.com/google/uuid"
 )
 
+type DocumentSpec struct {
+	Destination          string
+	GeneratorIdentifier  string
+	BatchSize            int
+	Mode                 string
+	IdMode               string
+	UpdatePercentage     int
+	NumClusters          int
+	HotClusterPercentage int
+}
+
 // Multiple string, number/float, boolean, object
 // 2kb size message
 type DocStructDouble struct {
@@ -118,7 +129,7 @@ type FriendDetailsStruct struct {
 var doc_id = 0
 var max_doc_id = 0
 
-func GenerateDoc(destination, identifier string, mode string, idMode string) (interface{}, error) {
+func GenerateDoc(spec DocumentSpec) (interface{}, error) {
 	docStruct := DocStructDouble{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
@@ -132,32 +143,33 @@ func GenerateDoc(destination, identifier string, mode string, idMode string) (in
 		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
 	}
 
-	if destination == "rockset" {
-		if mode == "mixed" {
-			// Insert new document every 10 docs
-			if doc_id % 10 == 0 {
-				doc["_id"] = formatDocId(getMaxDoc())
-				SetMaxDoc(getMaxDoc()+1)
-			} else {
+	if spec.Destination == "rockset" {
+		if spec.Mode == "mixed" {
+			// Randomly choose a number to decide whether to generate a doc with an existing doc id
+			// Use random instead of modulo to allow other random decisions like factoring to be uncorrelated
+			if rand.Intn(100) < spec.UpdatePercentage {
 				// Choose random id from one already existing doc id
 				doc["_id"] = formatDocId(rand.Intn(getMaxDoc()))
+			} else {
+				doc["_id"] = formatDocId(getMaxDoc())
+				SetMaxDoc(getMaxDoc()+1)
 			}
 			doc_id = doc_id + 1
 		// All other modes
-		} else if idMode == "uuid" {
+		} else if spec.IdMode == "uuid" {
 			doc["_id"] = guuid.New().String()
-		} else if idMode == "sequential"{
+		} else if spec.IdMode == "sequential"{
 			doc["_id"] = formatDocId(doc_id)
 			doc_id = doc_id + 1
 		} else {
-			panic(fmt.Sprintf("Unsupported generateDoc case: %s", idMode))
+			panic(fmt.Sprintf("Unsupported generateDoc case: %s", spec.IdMode))
 		}
 	}
 
 	doc["_event_time"] = CurrentTimeMicros()
 	// Set _ts as _event_time is not mutable
 	doc["_ts"] = CurrentTimeMicros()
-	doc["generator_identifier"] = identifier
+	doc["generator_identifier"] = spec.GeneratorIdentifier
 
 	return doc, nil
 }
@@ -178,11 +190,11 @@ func CurrentTimeMicros() int64 {
 	return int64(time.Nanosecond) * t.UnixNano() / int64(time.Microsecond)
 }
 
-func GenerateDocs(batchSize int, destination, identifier string, mode string, idMode string) ([]interface{}, error) {
-	var docs = make([]interface{}, batchSize, batchSize)
+func GenerateDocs(spec DocumentSpec) ([]interface{}, error) {
+	var docs = make([]interface{}, spec.BatchSize, spec.BatchSize)
 
-	for i := 0; i < batchSize; i++ {
-		doc, err := GenerateDoc(destination, identifier, mode, idMode)
+	for i := 0; i < spec.BatchSize; i++ {
+		doc, err := GenerateDoc(spec)
 		if err != nil {
 			return nil, err
 		}

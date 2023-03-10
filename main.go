@@ -24,7 +24,7 @@ func main() {
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := strings.ToLower(mustGetEnvString("DESTINATION"))
 	numDocs := getEnvDefaultInt("NUM_DOCS", -1)
-	maxDocs := getEnvDefaultInt("MAX_DOCS", -1) // Used for upserts to update existing collections
+	maxDocs := getEnvDefaultInt("MAX_DOCS", -1) // Used to track the known max doc id for upserts to update existing collections
 	mode := getEnvDefault("MODE", "add")
 	idMode := getEnvDefault("ID_MODE", "uuid")
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
@@ -33,6 +33,13 @@ func main() {
 	// Used to dynamically adjust the period between latency calculations to keep the number of queries roughly the same.
 	// Ex. If we want 1 query per 30s and we have 2 replicas, the polling period should be 2 * 30s=60s.
 	replicas := getEnvDefaultInt("REPLICAS", 2)
+
+	// Mixed mode related settings
+	updatePercentage := getEnvDefaultInt("UPDATE_PERCENTAGE", -1) // Percentage of documents that update existing documents
+
+	// Clustering related settings
+	numClusters := getEnvDefaultInt("NUM_CLUSTERS", -1)                    // Number of distinct values for the cluster key
+	hotClusterPercentage := getEnvDefaultInt("HOT_CLUSTER_PERCENTAGE", -1) // Percentage of inserts/updates that go to single cluster key. Remaining percentage is uniformly distributed
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -77,6 +84,17 @@ func main() {
 
 	generatorIdentifier := generator.RandomString(10)
 	fmt.Println("Generator identifier: ", generatorIdentifier)
+
+	documentSpec := generator.DocumentSpec{
+		Destination:          destination,
+		GeneratorIdentifier:  generatorIdentifier,
+		BatchSize:            batchSize,
+		Mode:                 mode,
+		IdMode:               idMode,
+		UpdatePercentage:     updatePercentage,
+		NumClusters:          numClusters,
+		HotClusterPercentage: hotClusterPercentage,
+	}
 
 	var d generator.Destination
 
@@ -159,7 +177,7 @@ func main() {
 			fmt.Printf("Initial sleep of %ds and polling period of %ds\n", sleepDuration, pollDuration)
 			timer := time.NewTimer(time.Duration(sleepDuration) * time.Second)
 			defer timer.Stop()
-			
+
 			select {
 			case <-doneChan:
 				return
@@ -188,7 +206,7 @@ func main() {
 	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	if mode == "add_then_patch" || mode == "add" || mode == "mixed"{
+	if mode == "add_then_patch" || mode == "add" || mode == "mixed" {
 		if mode == "mixed" {
 			generator.SetMaxDoc(maxDocs)
 		}
@@ -201,7 +219,7 @@ func main() {
 			case <-t.C:
 				for i := 0; i < wps; i++ {
 					// TODO: move doc generation out of this loop into a go routine that pre-generates them
-					docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier, mode, idMode)
+					docs, err := generator.GenerateDocs(documentSpec)
 					if err != nil {
 						log.Printf("document generation failed: %v", err)
 						os.Exit(1)
