@@ -22,7 +22,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
-	destination := mustGetEnvString("DESTINATION")
+	destination := strings.ToLower(mustGetEnvString("DESTINATION"))
 	numDocs := getEnvDefaultInt("NUM_DOCS", -1)
 	maxDocs := getEnvDefaultInt("MAX_DOCS", -1) // Used for upserts to update existing collections
 	mode := getEnvDefault("MODE", "add")
@@ -80,7 +80,7 @@ func main() {
 
 	var d generator.Destination
 
-	switch strings.ToLower(destination) {
+	switch destination {
 	case "rockset":
 		apiKey := mustGetEnvString("ROCKSET_API_KEY")
 		apiServer := mustGetEnvString("ROCKSET_API_SERVER")
@@ -223,7 +223,7 @@ func main() {
 			// must explicitly set number of docs so updates are applied evenly across document keys
 			generator.SetMaxDoc(numDocs)
 		}
-		if destination != "Rockset" {
+		if destination != "rockset" {
 			panic("Patches can only be generated for Rockset at this time")
 		}
 		patchChannel := make(chan map[string]interface{}, 1)
