@@ -166,12 +166,24 @@ func GenerateDoc(spec DocumentSpec) (interface{}, error) {
 		}
 	}
 
+	if spec.NumClusters > 0 {
+		doc["Cluster1"] = getClusterKey(spec.NumClusters, spec.HotClusterPercentage)
+	}
+
 	doc["_event_time"] = CurrentTimeMicros()
 	// Set _ts as _event_time is not mutable
 	doc["_ts"] = CurrentTimeMicros()
 	doc["generator_identifier"] = spec.GeneratorIdentifier
 
 	return doc, nil
+}
+
+func getClusterKey(numClusters int, hotClusterPercentage int) string {
+ 	if hotClusterPercentage > 0 && rand.Intn(100) < hotClusterPercentage {
+		return "0@gmail.com"
+	} else {
+		return fmt.Sprintf("%d@gmail.com", rand.Intn(numClusters))
+	}
 }
 
 func getMaxDoc() int {
