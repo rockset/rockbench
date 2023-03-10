@@ -58,7 +58,7 @@ func TestRockset_GetLatestTimestamp(t *testing.T) {
 func TestRockset_SendDocument(t *testing.T) {
 	r := NewRocksetClient("")
 
-	docs, err := GenerateDocs(10, "Rockset", r.GeneratorIdentifier, "uuid")
+	docs, err := GenerateDocs(10, "rockset", r.GeneratorIdentifier, "add", "uuid")
 	assert.Nil(t, err)
 	err = r.SendDocument(docs)
 	assert.Nil(t, err)
