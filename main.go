@@ -40,6 +40,7 @@ func main() {
 	// Clustering related settings
 	numClusters := getEnvDefaultInt("NUM_CLUSTERS", -1)                    // Number of distinct values for the cluster key
 	hotClusterPercentage := getEnvDefaultInt("HOT_CLUSTER_PERCENTAGE", -1) // Percentage of inserts/updates that go to single cluster key. Remaining percentage is uniformly distributed
+	promPort := getEnvDefaultInt("PROM_PORT", 9161)
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -166,7 +167,7 @@ func main() {
 	}
 
 	if exportMetrics {
-		go metricListener()
+		go metricListener(promPort)
 	}
 
 	signalChan := make(chan os.Signal, 1)
@@ -353,9 +354,9 @@ func getEnvDefault(env string, defaultValue string) string {
 }
 
 // metricListener needs to be launched asynchronously, as ListenAndServe is a blocking call
-func metricListener() {
+func metricListener(promPort int) {
 	http.Handle("/metrics", promhttp.Handler())
-	err := http.ListenAndServe(":9161", nil)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", promPort), nil)
 	if err != nil && err != http.ErrServerClosed {
 		log.Fatalf("failed to start metrics listener: %v", err)
 	}
