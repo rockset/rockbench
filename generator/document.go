@@ -3,10 +3,11 @@ package generator
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-faker/faker/v4"
-	guuid "github.com/google/uuid"
 	"math/rand"
 	"time"
+
+	"github.com/go-faker/faker/v4"
+	guuid "github.com/google/uuid"
 )
 
 type DocStruct struct {
@@ -73,7 +74,7 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
 	}
 
-	if destination == "Rockset" {
+	if destination == "rockset" {
 		if idMode == "uuid" {
 			doc["_id"] = guuid.New().String()
 		} else {
