@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +18,8 @@ import (
 )
 
 func main() {
+	// Seed so that values are random across replicas
+	rand.Seed(time.Now().UnixNano())
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := strings.ToLower(mustGetEnvString("DESTINATION"))
@@ -26,6 +29,10 @@ func main() {
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
 	exportMetrics := getEnvDefaultBool("EXPORT_METRICS", false)
 	trackLatency := getEnvDefaultBool("TRACK_LATENCY", false)
+	// Used to dynamically adjust the period between latency calculations to reduce the total rate of queries
+	// Ex. If we want 1 query per 25s and we have 2 replicas, the polling period should be 2 * 25s=50s for each replica.
+	// Note: Increasing the polling period often results in not enough samples for calculating p99 latency.
+	replicas := getEnvDefaultInt("REPLICAS", 1)
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -133,7 +140,25 @@ func main() {
 
 	if trackLatency {
 		go func() {
-			t := time.NewTicker(30 * time.Second)
+			// On average, send a request every 25s
+			pollDuration := replicas * 25
+			// Sleep a random amount to space requests out between each other
+			sleepDuration := rand.Int31n(int32(pollDuration))
+			fmt.Printf("Initial sleep of %ds and polling period of %ds\n", sleepDuration, pollDuration)
+			timer := time.NewTimer(time.Duration(sleepDuration) * time.Second)
+			defer timer.Stop()
+
+			select {
+			case <-doneChan:
+				return
+			case <-timer.C:
+			}
+
+			fmt.Printf("Sleep done. Now issuing requests to calculate e2e latency.\n")
+			// Initial request before sleeping
+			getE2ELatency(d)
+
+			t := time.NewTicker(time.Duration(pollDuration) * time.Second)
 			defer t.Stop()
 
 			for {
