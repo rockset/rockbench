@@ -167,23 +167,13 @@ func main() {
 				case <-doneChan:
 					return
 				case <-t.C:
-					latestTimestamp, err := d.GetLatestTimestamp()
-					now := time.Now()
-					latency := now.Sub(latestTimestamp)
-
-					if err == nil {
-						fmt.Printf("Latency: %s\n", latency)
-						generator.RecordE2ELatency(float64(latency.Microseconds()))
-					} else {
-						log.Printf("failed to get latest timestamp: %v", err)
-					}
+					getE2ELatency(d)
 				}
 			}
 		}()
 	}
 
 	// Write function
-
 	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -204,7 +194,7 @@ func main() {
 					}
 					go func(i int) {
 						if err := d.SendDocument(docs); err != nil {
-							log.Printf("failed to send document %d of %d: %v", i, wps, err)
+							log.Printf("failed to send document batch %d of %d (wps): %v", i, wps, err)
 						}
 					}(i)
 					docs_written = docs_written + batchSize
@@ -252,6 +242,19 @@ func main() {
 			}
 
 		}
+	}
+}
+
+func getE2ELatency(d generator.Destination) {
+	latestTimestamp, err := d.GetLatestTimestamp()
+	now := time.Now()
+	latency := now.Sub(latestTimestamp)
+
+	if err == nil {
+		fmt.Printf("Latency: %s\n", latency)
+		generator.RecordE2ELatency(float64(latency.Microseconds()))
+	} else {
+		log.Printf("failed to get latest timestamp: %v", err)
 	}
 }
 
