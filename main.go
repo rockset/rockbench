@@ -33,6 +33,7 @@ func main() {
 	// Ex. If we want 1 query per 25s and we have 2 replicas, the polling period should be 2 * 25s=50s for each replica.
 	// Note: Increasing the polling period often results in not enough samples for calculating p99 latency.
 	replicas := getEnvDefaultInt("REPLICAS", 1)
+	promPort := getEnvDefaultInt("PROM_PORT", 9161)
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -128,7 +129,7 @@ func main() {
 	}
 
 	if exportMetrics {
-		go metricListener()
+		go metricListener(promPort)
 	}
 
 	signalChan := make(chan os.Signal, 1)
@@ -309,9 +310,9 @@ func getEnvDefault(env string, defaultValue string) string {
 }
 
 // metricListener needs to be launched asynchronously, as ListenAndServe is a blocking call
-func metricListener() {
+func metricListener(promPort int) {
 	http.Handle("/metrics", promhttp.Handler())
-	err := http.ListenAndServe(":9161", nil)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", promPort), nil)
 	if err != nil && err != http.ErrServerClosed {
 		log.Fatalf("failed to start metrics listener: %v", err)
 	}
