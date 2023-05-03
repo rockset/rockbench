@@ -85,7 +85,7 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 
 	// The identifier needs to be lowercased because by default, Elastic will index text in lowercase and the term query is case-sensitive
 	// This can be avoided using the match query, but this is slightly slower than the term query
-	jsonBody := fmt.Sprintf("{\"aggs\":{\"max_event_time_for_identifier\":{\"filter\":{\"term\":{\"generator_identifier\":\"%s\"}},\"aggs\":{\"max_event_time\":{\"max\":{\"field\":\"_event_time\"}}}}}}", strings.ToLower(e.GeneratorIdentifier))
+	jsonBody := fmt.Sprintf("{\"query\":{\"term\":{\"generator_identifier\": \"%s\"}},\"aggs\":{\"max_event_time_for_identifier\":{\"max\":{\"field\":\"_event_time\"}}}}", strings.ToLower(e.GeneratorIdentifier))
 	req, err := http.NewRequest(http.MethodPost, searchURL, bytes.NewBufferString(jsonBody))
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to create new request: %w", err)
@@ -133,7 +133,6 @@ func (e *Elastic) GetLatestTimestamp() (time.Time, error) {
 	// TODO: check type assertions
 	result = result["aggregations"].(map[string]interface{})
 	result = result["max_event_time_for_identifier"].(map[string]interface{})
-	result = result["max_event_time"].(map[string]interface{})
 	if result["value"] == nil {
 		return time.Time{}, errors.New("malformed result, value is nil")
 	}
