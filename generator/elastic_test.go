@@ -3,11 +3,12 @@ package generator
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func NewElasticClient(result string) *Elastic {
@@ -31,7 +32,7 @@ func NewElasticClient(result string) *Elastic {
 }
 func TestElastic_GetLatestTimestamp(t *testing.T) {
 	expected := time.Now()
-	r := NewElasticClient(fmt.Sprintf(`{"aggregations":{"max_event_time_for_identifier":{"max_event_time":{"value":%d}}}}`,
+	r := NewElasticClient(fmt.Sprintf(`{"aggregations":{"max_event_time_for_identifier":{"value":%d}}}`,
 		expected.UnixNano()/1000))
 
 	t0, err := r.GetLatestTimestamp()

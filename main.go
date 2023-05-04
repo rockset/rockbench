@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,15 +18,22 @@ import (
 )
 
 func main() {
+	// Seed so that values are random across replicas
+	rand.Seed(time.Now().UnixNano())
 	wps := mustGetEnvInt("WPS")
 	batchSize := mustGetEnvInt("BATCH_SIZE")
-	destination := mustGetEnvString("DESTINATION")
+	destination := strings.ToLower(mustGetEnvString("DESTINATION"))
 	numDocs := getEnvDefaultInt("NUM_DOCS", -1)
 	mode := getEnvDefault("MODE", "add")
 	idMode := getEnvDefault("ID_MODE", "uuid")
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
 	exportMetrics := getEnvDefaultBool("EXPORT_METRICS", false)
 	trackLatency := getEnvDefaultBool("TRACK_LATENCY", false)
+	// Used to dynamically adjust the period between latency calculations to reduce the total rate of queries
+	// Ex. If we want 1 query per 25s and we have 2 replicas, the polling period should be 2 * 25s=50s for each replica.
+	// Note: Increasing the polling period often results in not enough samples for calculating p99 latency.
+	replicas := getEnvDefaultInt("REPLICAS", 1)
+	promPort := getEnvDefaultInt("PROM_PORT", 9161)
 
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
@@ -61,7 +69,7 @@ func main() {
 
 	var d generator.Destination
 
-	switch strings.ToLower(destination) {
+	switch destination {
 	case "rockset":
 		apiKey := mustGetEnvString("ROCKSET_API_KEY")
 		apiServer := mustGetEnvString("ROCKSET_API_SERVER")
@@ -121,7 +129,7 @@ func main() {
 	}
 
 	if exportMetrics {
-		go metricListener()
+		go metricListener(promPort)
 	}
 
 	signalChan := make(chan os.Signal, 1)
@@ -133,7 +141,25 @@ func main() {
 
 	if trackLatency {
 		go func() {
-			t := time.NewTicker(30 * time.Second)
+			// On average, send a request every 25s
+			pollDuration := replicas * 25
+			// Sleep a random amount to space requests out between each other
+			sleepDuration := rand.Int31n(int32(pollDuration))
+			fmt.Printf("Initial sleep of %ds and polling period of %ds\n", sleepDuration, pollDuration)
+			timer := time.NewTimer(time.Duration(sleepDuration) * time.Second)
+			defer timer.Stop()
+
+			select {
+			case <-doneChan:
+				return
+			case <-timer.C:
+			}
+
+			fmt.Printf("Sleep done. Now issuing requests to calculate e2e latency.\n")
+			// Initial request before sleeping
+			getE2ELatency(d)
+
+			t := time.NewTicker(time.Duration(pollDuration) * time.Second)
 			defer t.Stop()
 
 			for {
@@ -141,23 +167,13 @@ func main() {
 				case <-doneChan:
 					return
 				case <-t.C:
-					latestTimestamp, err := d.GetLatestTimestamp()
-					now := time.Now()
-					latency := now.Sub(latestTimestamp)
-
-					if err == nil {
-						fmt.Printf("Latency: %s\n", latency)
-						generator.RecordE2ELatency(float64(latency.Microseconds()))
-					} else {
-						log.Printf("failed to get latest timestamp: %v", err)
-					}
+					getE2ELatency(d)
 				}
 			}
 		}()
 	}
 
 	// Write function
-
 	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -178,7 +194,7 @@ func main() {
 					}
 					go func(i int) {
 						if err := d.SendDocument(docs); err != nil {
-							log.Printf("failed to send document %d of %d: %v", i, wps, err)
+							log.Printf("failed to send document batch %d of %d (wps): %v", i, wps, err)
 						}
 					}(i)
 					docs_written = docs_written + batchSize
@@ -193,7 +209,7 @@ func main() {
 			// must explicitly set number of docs so updates are applied evenly across document keys
 			generator.SetMaxDoc(numDocs)
 		}
-		if destination != "Rockset" {
+		if destination != "rockset" {
 			panic("Patches can only be generated for Rockset at this time")
 		}
 		patchChannel := make(chan map[string]interface{}, 1)
@@ -226,6 +242,19 @@ func main() {
 			}
 
 		}
+	}
+}
+
+func getE2ELatency(d generator.Destination) {
+	latestTimestamp, err := d.GetLatestTimestamp()
+	now := time.Now()
+	latency := now.Sub(latestTimestamp)
+
+	if err == nil {
+		fmt.Printf("Latency: %s\n", latency)
+		generator.RecordE2ELatency(float64(latency.Microseconds()))
+	} else {
+		log.Printf("failed to get latest timestamp: %v", err)
 	}
 }
 
@@ -284,9 +313,9 @@ func getEnvDefault(env string, defaultValue string) string {
 }
 
 // metricListener needs to be launched asynchronously, as ListenAndServe is a blocking call
-func metricListener() {
+func metricListener(promPort int) {
 	http.Handle("/metrics", promhttp.Handler())
-	err := http.ListenAndServe(":9161", nil)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", promPort), nil)
 	if err != nil && err != http.ErrServerClosed {
 		log.Fatalf("failed to start metrics listener: %v", err)
 	}

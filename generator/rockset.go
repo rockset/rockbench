@@ -88,7 +88,7 @@ func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 
 	url := fmt.Sprintf("%s/v1/orgs/self/queries", r.APIServer)
 	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated to have two components
-	query := fmt.Sprintf("select _ts as ts from \"%s\".\"%s\" where generator_identifier = '%s' ORDER BY _ts DESC limit 1", rcollection[0], rcollection[1], r.GeneratorIdentifier)
+	query := fmt.Sprintf("select UNIX_MICROS(max(_event_time)) as ts from \"%s\".\"%s\" where generator_identifier = '%s'", rcollection[0], rcollection[1], r.GeneratorIdentifier)
 	body := map[string]interface{}{"sql": map[string]interface{}{"query": query}}
 	jsonBody, err := json.Marshal(body)
 	if err != nil {

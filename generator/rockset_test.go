@@ -3,11 +3,12 @@ package generator
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const defaultRocksetEndpoint = "https://api.rs2.usw2.rockset.com"
