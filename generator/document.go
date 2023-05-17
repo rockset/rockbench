@@ -109,12 +109,25 @@ func CurrentTimeMicros() int64 {
 func GenerateDocs(batchSize int, destination, identifier string, idMode string) ([]interface{}, error) {
 	var docs = make([]interface{}, batchSize, batchSize)
 
-	for i := 0; i < batchSize; i++ {
-		doc, err := GenerateDoc(destination, identifier, idMode)
-		if err != nil {
-			return nil, err
-		}
-		docs[i] = doc
+	i := 0
+	for i < batchSize {
+		// Choose between 10 and 20 documents to have the same field value
+		numSameField := rand.Intn(11) + 10
+		// Use uuid so that different kubernetes replicas won't generate the same values
+		claimedBy := guuid.New().String()
+		for j := 0; j < numSameField; j++ {
+			doc, err := GenerateDoc(destination, identifier, idMode)
+			if err != nil {
+				return nil, err
+			}
+			doc.(map[string]interface{})["claimedBy"] = claimedBy
+			docs[i] = doc
+			i++
+			// Break early once we reach the batch size
+			if (i >= batchSize) {
+				break
+			}
+		}		
 	}
 
 	return docs, nil
