@@ -16,7 +16,7 @@ RockBench measures the data latency of any real-time database. It is designed to
 batches of fixed size to a database and also calculate and report the data latency by querying the database at fixed
 intervals.
 
-The goal for rockbench was simple: have a representative way to generate reallife event data with the following characteristics:
+The goal for rockbench: have a representative way to generate reallife event data with the following characteristics:
 
 - Streaming Writes: records are written in streaming fashion
 - Nested Objects: records have nested objects with arrays of nested objects inside it 
