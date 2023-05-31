@@ -86,9 +86,12 @@ func (r *Rockset) SendPatch(docs []interface{}) error {
 // GetLatestTimestamp returns the latest _event_time in Rockset
 func (r *Rockset) GetLatestTimestamp() (time.Time, error) {
 
+	// Unix time from 2 minutes ago to reduce the number of documents scanned by query. Query fails if result older than 2 minutes
+	eventTimeStartSec := time.Now().Unix() - 120
+
 	url := fmt.Sprintf("%s/v1/orgs/self/queries", r.APIServer)
 	rcollection := strings.Split(r.CollectionPath, ".") // this is already validated to have two components
-	query := fmt.Sprintf("select UNIX_MICROS(max(_event_time)) as ts from \"%s\".\"%s\" where generator_identifier = '%s'", rcollection[0], rcollection[1], r.GeneratorIdentifier)
+	query := fmt.Sprintf("select UNIX_MICROS(max(_event_time)) as ts from \"%s\".\"%s\" where generator_identifier = '%s' and _event_time > TIMESTAMP_SECONDS(%d)", rcollection[0], rcollection[1], r.GeneratorIdentifier, eventTimeStartSec)
 	body := map[string]interface{}{"sql": map[string]interface{}{"query": query}}
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
