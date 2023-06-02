@@ -21,63 +21,6 @@ type DocumentSpec struct {
 	HotClusterPercentage int
 }
 
-// Multiple string, number/float, boolean, object
-// 2kb size message
-type DocStructDouble struct {
-	Guid       string
-	Balance1    float64 `faker:"amount"`
-	Balance2    float64 `faker:"amount"`
-	Balance3    float64 `faker:"amount"`
-	Balance4    float64 `faker:"amount"`
-	Balance5    float64 `faker:"amount"`
-	Balance6    float64 `faker:"amount"`
-	Balance7    float64 `faker:"amount"`
-	Balance8    float64 `faker:"amount"`
-	Balance9    float64 `faker:"amount"`
-	Balance10    float64 `faker:"amount"`
-	Email1      string `faker:"email"`
-	Email2      string `faker:"email"`
-	Email3      string `faker:"email"`
-	Email4      string `faker:"email"`
-	Email5      string `faker:"email"`
-	Email6      string `faker:"email"`
-	Email7      string `faker:"email"`
-	Email8      string `faker:"email"`
-	Email9      string `faker:"email"`
-	Email10      string `faker:"email"`
-	Phone1      string `faker:"phone_number"`
-	Phone2      string `faker:"phone_number"`
-	Phone3      string `faker:"phone_number"`
-	Phone4      string `faker:"phone_number"`
-	Phone5      string `faker:"phone_number"`
-	Phone6      string `faker:"phone_number"`
-	Phone7      string `faker:"phone_number"`
-	Phone8      string `faker:"phone_number"`
-	Phone9      string `faker:"phone_number"`
-	Phone10      string `faker:"phone_number"`
-	Boolean1   bool
-	Boolean2   bool
-	Boolean3   bool
-	Boolean4   bool
-	Boolean5   bool
-	Boolean6   bool
-	Boolean7   bool
-	Boolean8   bool
-	Boolean9   bool
-	Boolean10   bool
-	Address1    AddressStruct
-	Address2    AddressStruct
-	Address3    AddressStruct
-	Address4    AddressStruct
-	Address5    AddressStruct
-	Name1       NameStruct
-	Name2       NameStruct
-	Name3       NameStruct
-	Name4       NameStruct
-	Name5       NameStruct
-	Tags1       []string `faker:"slice_len=9,len=14"`
-}
-
 type DocStruct struct {
 	Guid       string
 	IsActive   bool
@@ -130,7 +73,7 @@ var doc_id = 0
 var max_doc_id = 0
 
 func GenerateDoc(spec DocumentSpec) (interface{}, error) {
-	docStruct := DocStructDouble{}
+	docStruct := DocStruct{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate fake document: %w", err)
@@ -146,7 +89,6 @@ func GenerateDoc(spec DocumentSpec) (interface{}, error) {
 	if spec.Destination == "rockset" {
 		if spec.Mode == "mixed" {
 			// Randomly choose a number to decide whether to generate a doc with an existing doc id
-			// Use random instead of modulo to allow other random decisions like factoring to be uncorrelated
 			if rand.Intn(100) < spec.UpdatePercentage {
 				// Choose random id from one already existing doc id
 				doc["_id"] = formatDocId(rand.Intn(getMaxDoc()))
@@ -167,7 +109,7 @@ func GenerateDoc(spec DocumentSpec) (interface{}, error) {
 	}
 
 	if spec.NumClusters > 0 {
-		doc["Cluster1"] = getClusterKey(spec.NumClusters, spec.HotClusterPercentage)
+		doc["cluster1"] = getClusterKey(spec.NumClusters, spec.HotClusterPercentage)
 	}
 
 	doc["_event_time"] = CurrentTimeMicros()
