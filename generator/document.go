@@ -10,6 +10,17 @@ import (
 	guuid "github.com/google/uuid"
 )
 
+type DocumentSpec struct {
+	Destination          string
+	GeneratorIdentifier  string
+	BatchSize            int
+	Mode                 string
+	IdMode               string
+	UpdatePercentage     int
+	NumClusters          int
+	HotClusterPercentage int
+}
+
 type DocStruct struct {
 	Guid       string
 	IsActive   bool
@@ -59,8 +70,9 @@ type FriendDetailsStruct struct {
 }
 
 var doc_id = 0
+var max_doc_id = 0
 
-func GenerateDoc(destination, identifier string, idMode string) (interface{}, error) {
+func GenerateDoc(spec DocumentSpec) (interface{}, error) {
 	docStruct := DocStruct{}
 	err := faker.FakeData(&docStruct)
 	if err != nil {
@@ -74,31 +86,57 @@ func GenerateDoc(destination, identifier string, idMode string) (interface{}, er
 		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
 	}
 
-	if destination == "rockset" {
-		if idMode == "uuid" {
+	if spec.Destination == "rockset" {
+		if spec.Mode == "mixed" {
+			// Randomly choose a number to decide whether to generate a doc with an existing doc id
+			if rand.Intn(100) < spec.UpdatePercentage {
+				// Choose random id from one already existing doc id
+				doc["_id"] = formatDocId(rand.Intn(getMaxDoc()))
+			} else {
+				doc["_id"] = formatDocId(getMaxDoc())
+				SetMaxDoc(getMaxDoc()+1)
+			}
+			doc_id = doc_id + 1
+		// All other modes
+		} else if spec.IdMode == "uuid" {
 			doc["_id"] = guuid.New().String()
-		} else {
+		} else if spec.IdMode == "sequential"{
 			doc["_id"] = formatDocId(doc_id)
 			doc_id = doc_id + 1
+		} else {
+			panic(fmt.Sprintf("Unsupported generateDoc case: %s", spec.IdMode))
 		}
+	}
+
+	if spec.NumClusters > 0 {
+		doc["cluster1"] = getClusterKey(spec.NumClusters, spec.HotClusterPercentage)
 	}
 
 	doc["_event_time"] = CurrentTimeMicros()
 	// Set _ts as _event_time is not mutable
 	doc["_ts"] = CurrentTimeMicros()
-	doc["generator_identifier"] = identifier
+	doc["generator_identifier"] = spec.GeneratorIdentifier
 
 	return doc, nil
+}
+
+func getClusterKey(numClusters int, hotClusterPercentage int) string {
+ 	if hotClusterPercentage > 0 && rand.Intn(100) < hotClusterPercentage {
+		return "0@gmail.com"
+	} else {
+		return fmt.Sprintf("%d@gmail.com", rand.Intn(numClusters))
+	}
 }
 
 func getMaxDoc() int {
 	// doc_ids are left padded monotonic integers,
 	//this returns the highest exclusive doc id for purposes of issuing patches.
-	return doc_id
+	return max_doc_id
 }
 
 func SetMaxDoc(maxDocId int) {
-	doc_id = maxDocId
+	// doc_id = maxDocId
+	max_doc_id = maxDocId
 }
 
 func CurrentTimeMicros() int64 {
@@ -106,11 +144,11 @@ func CurrentTimeMicros() int64 {
 	return int64(time.Nanosecond) * t.UnixNano() / int64(time.Microsecond)
 }
 
-func GenerateDocs(batchSize int, destination, identifier string, idMode string) ([]interface{}, error) {
-	var docs = make([]interface{}, batchSize, batchSize)
+func GenerateDocs(spec DocumentSpec) ([]interface{}, error) {
+	var docs = make([]interface{}, spec.BatchSize, spec.BatchSize)
 
-	for i := 0; i < batchSize; i++ {
-		doc, err := GenerateDoc(destination, identifier, idMode)
+	for i := 0; i < spec.BatchSize; i++ {
+		doc, err := GenerateDoc(spec)
 		if err != nil {
 			return nil, err
 		}
@@ -262,7 +300,7 @@ func genUniqueInRange(limit int, count int) []int {
 
 	ids := make([]int, count)
 	i := 0
-	for k, _ := range ids_to_patch {
+	for k := range ids_to_patch {
 		ids[i] = k
 		i++
 	}

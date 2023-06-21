@@ -24,6 +24,7 @@ func main() {
 	batchSize := mustGetEnvInt("BATCH_SIZE")
 	destination := strings.ToLower(mustGetEnvString("DESTINATION"))
 	numDocs := getEnvDefaultInt("NUM_DOCS", -1)
+	maxDocs := getEnvDefaultInt("MAX_DOCS", -1) // Used to track the known max doc id for upserts to update existing collections
 	mode := getEnvDefault("MODE", "add")
 	idMode := getEnvDefault("ID_MODE", "uuid")
 	patchMode := getEnvDefault("PATCH_MODE", "replace")
@@ -35,11 +36,18 @@ func main() {
 	replicas := getEnvDefaultInt("REPLICAS", 1)
 	promPort := getEnvDefaultInt("PROM_PORT", 9161)
 
+	// Mixed mode related settings
+	updatePercentage := getEnvDefaultInt("UPDATE_PERCENTAGE", -1) // Percentage of documents that update existing documents
+
+	// Clustering related settings
+	numClusters := getEnvDefaultInt("NUM_CLUSTERS", -1)                    // Number of distinct values for the cluster key
+	hotClusterPercentage := getEnvDefaultInt("HOT_CLUSTER_PERCENTAGE", -1) // Percentage of inserts/updates that go to single cluster key. Remaining percentage is uniformly distributed
+
 	if !(patchMode == "replace" || patchMode == "add") {
 		panic("Invalid patch mode specified, expecting either 'replace' or 'add'")
 	}
-	if !(mode == "add" || mode == "patch" || mode == "add_then_patch") {
-		panic("Invalid mode specified, expecting one of 'add', 'patch', 'add_then_patch'")
+	if !(mode == "add" || mode == "patch" || mode == "add_then_patch" || mode == "mixed") {
+		panic("Invalid mode specified, expecting one of 'add', 'patch', 'add_then_patch', 'mixed'")
 	}
 	if !(idMode == "uuid" || idMode == "sequential") {
 		panic("Invalid idMode specified, expecting 'uuid' or 'sequential'")
@@ -51,6 +59,26 @@ func main() {
 
 	if mode == "patch" && numDocs <= 0 {
 		panic("Patch mode requires a positive number of docs to perform patches against. Please specify a number of documents via NUM_DOCS env var.")
+	}
+
+	if mode == "mixed" {
+		if idMode != "sequential" {
+			panic("`mixed` MODE supports ID_MODE `sequential` only")
+		}
+		if updatePercentage < 0 || updatePercentage > 100 {
+			panic("`mixed` MODE requires a positive number between 0 and 100. Please specify the percentage of documents to be updates via UPDATE_PERCENTAGE env var")
+		}
+		if maxDocs <= 0 {
+			panic("`mixed` MODE requires a positive number for MAX_DOCS. This tracks the maximum doc id in the collection and can be used to continue adding document ids sequentially. If no documents exist, specify 1")
+		}
+	}
+
+	if hotClusterPercentage > 0 && numClusters < 0 {
+		panic("NUM_CLUSTERS must be specified if HOT_CLUSTER_PERCENTAGE is provided.")
+	}
+
+	if hotClusterPercentage == 0 || hotClusterPercentage > 100 || numClusters == 0 {
+		panic("NUM_CLUSTERS must be a positive number and HOT_CLUSTER_PERCENTAGE must be greater than 0 and less than or equal to 100 if specified.")
 	}
 
 	pps := getEnvDefaultInt("PPS", wps)
@@ -66,6 +94,17 @@ func main() {
 
 	generatorIdentifier := generator.RandomString(10)
 	fmt.Println("Generator identifier: ", generatorIdentifier)
+
+	documentSpec := generator.DocumentSpec{
+		Destination:          destination,
+		GeneratorIdentifier:  generatorIdentifier,
+		BatchSize:            batchSize,
+		Mode:                 mode,
+		IdMode:               idMode,
+		UpdatePercentage:     updatePercentage,
+		NumClusters:          numClusters,
+		HotClusterPercentage: hotClusterPercentage,
+	}
 
 	var d generator.Destination
 
@@ -177,7 +216,10 @@ func main() {
 	docs_written := 0
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	if mode == "add_then_patch" || mode == "add" {
+	if mode == "add_then_patch" || mode == "add" || mode == "mixed" {
+		if mode == "mixed" {
+			generator.SetMaxDoc(maxDocs)
+		}
 		for numDocs < 0 || docs_written < numDocs {
 			select {
 			// when doneChan is closed, receive immediately returns the zero value
@@ -187,7 +229,7 @@ func main() {
 			case <-t.C:
 				for i := 0; i < wps; i++ {
 					// TODO: move doc generation out of this loop into a go routine that pre-generates them
-					docs, err := generator.GenerateDocs(batchSize, destination, generatorIdentifier, idMode)
+					docs, err := generator.GenerateDocs(documentSpec)
 					if err != nil {
 						log.Printf("document generation failed: %v", err)
 						os.Exit(1)

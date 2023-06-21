@@ -42,8 +42,18 @@ func TestElastic_GetLatestTimestamp(t *testing.T) {
 
 func TestElastic_SendDocument(t *testing.T) {
 	r := NewElasticClient("")
+	spec := DocumentSpec{
+		Destination:          "elastic",
+		GeneratorIdentifier:  r.GeneratorIdentifier,
+		BatchSize:            10,
+		Mode:                 "add",
+		IdMode:               "sequential",
+		UpdatePercentage:     -1,
+		NumClusters:          -1,
+		HotClusterPercentage: -1,
+	};
 
-	docs, err := GenerateDocs(10, "Elastic", r.GeneratorIdentifier, "sequential")
+	docs, err := GenerateDocs(spec)
 	assert.Nil(t, err)
 	err = r.SendDocument(docs)
 	assert.Nil(t, err)
