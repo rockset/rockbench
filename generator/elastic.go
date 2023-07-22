@@ -73,7 +73,6 @@ func (e *Elastic) SendPatch(docs []interface{}) error {
 		}
 		return fmt.Errorf("error code: %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
-	// fmt.Println("doc sent!")
 	recordPatchesCompleted(float64(numDocs))
 	return nil
 
