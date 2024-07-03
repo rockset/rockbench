@@ -1,0 +1,45 @@
+services:
+  opensearch:
+    container_name: "${LOCALSTACK_DOCKER_NAME-opensearch}"
+    image: opensearchproject/opensearch:2.10.0
+    environment:
+      - node.name=opensearch
+      - cluster.name=opensearch-docker-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_SECURITY_PLUGIN=true"
+    ports:
+      - 9200:9200 # REST API
+      - 9600:9600 # Performance Analyzer
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - data01:/usr/share/opensearch/data
+
+  cratedb:
+    image: crate:latest
+    ports:
+      - "4200:4200"
+      - "5432:5432"
+    volumes:
+      - /tmp/crate/00:/data
+    command: ["crate",
+              "-Cnetwork.host=_site_"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      - CRATE_HEAP_SIZE=2g
+
+volumes:
+  data01:
+    name: tmp
+    driver: local

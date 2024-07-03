@@ -46,6 +46,9 @@ ELASTIC_AUTH="ApiKey xxx" ELASTIC_URL=https://... ELASTIC_INDEX=index_name WPS=1
 
 # Send data to Snowflake and report data latency
 SNOWFLAKE_ACCOUNT=xxxx SNOWFLAKE_USER=xxxx SNOWFLAKE_PASSWORD=xxxx SNOWFLAKE_WAREHOUSE=xxxx SNOWFLAKE_DATABASE=xxxx SNOWFLAKE_STAGES3BUCKETNAME=xxxx AWS_REGION=xxxx WPS=1 BATCH_SIZE=50 TRACK_LATENCY=true DESTINATION=Snowflake ./rockbench
+
+# Send data to CrateDB and report data latency
+CRATEDB_URI="postgres://crate:@localhost:5432/test?pool_max_conns=10&pool_min_conns=3" WPS=1 BATCH_SIZE=50 DESTINATION=CrateDB TRACK_LATENCY=true ./rockbench
 ```
 
 - To run with Docker container
@@ -96,3 +99,13 @@ two methods:
 
 Once the new source is implemented, handle it
 in [main.go](https://github.com/rockset/rockbench/blob/master/generator/main.go).
+
+## Development
+
+```
+# Run docker compose for local development
+docker compose -f dev/compose.yml up -d
+
+To test CrateDB part run:
+CRATEDB_URI="postgres://crate:@localhost:5432/test?pool_max_conns=10&pool_min_conns=3" go test ./... 
+```

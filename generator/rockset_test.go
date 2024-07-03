@@ -66,7 +66,7 @@ func TestRockset_SendDocument(t *testing.T) {
 		UpdatePercentage:     -1,
 		NumClusters:          -1,
 		HotClusterPercentage: -1,
-	};
+	}
 
 	docs, err := GenerateDocs(spec)
 	assert.Nil(t, err)

@@ -93,7 +93,7 @@ func GenerateDoc(spec DocumentSpec) (interface{}, error) {
 			doc["_id"] = formatDocId(rand.Intn(getMaxDoc()))
 		} else {
 			doc["_id"] = formatDocId(getMaxDoc())
-			SetMaxDoc(getMaxDoc()+1)
+			SetMaxDoc(getMaxDoc() + 1)
 		}
 		doc_id = doc_id + 1
 		// All other modes
@@ -119,7 +119,7 @@ func GenerateDoc(spec DocumentSpec) (interface{}, error) {
 }
 
 func getClusterKey(numClusters int, hotClusterPercentage int) string {
- 	if hotClusterPercentage > 0 && rand.Intn(100) < hotClusterPercentage {
+	if hotClusterPercentage > 0 && rand.Intn(100) < hotClusterPercentage {
 		return "0@gmail.com"
 	} else {
 		return fmt.Sprintf("%d@gmail.com", rand.Intn(numClusters))
@@ -171,11 +171,11 @@ func GeneratePatches(num_patch int, destination string, c chan map[string]interf
 
 	ids_to_patch := genUniqueInRange(getMaxDoc(), num_patch)
 	for _, id := range ids_to_patch {
-		if (destination == "elastic") {
+		if destination == "elastic" {
 			patch := generateElasticPatch(id, <-c)
 			patches = append(patches, patch)
 
-		} else if (destination == "rockset") {
+		} else if destination == "rockset" {
 			patch := generateRocksetPatch(id, <-c)
 			patches = append(patches, patch)
 		}
@@ -186,26 +186,26 @@ func GeneratePatches(num_patch int, destination string, c chan map[string]interf
 func RandomFieldAdd(destination string, c chan map[string]interface{}) {
 	// Adding fields or array members
 	for {
-		if (destination == "rockset") {
+		if destination == "rockset" {
 			options := []map[string]interface{}{{
 				"op":    "add",
 				"path":  "/" + faker.UUIDDigit(),
 				"value": faker.Email(),
-				},
+			},
 				{
-				"op":    "add",
-				"path":  "/Tags/-",
-				"value": faker.UUIDHyphenated(), // Append to tags array
+					"op":    "add",
+					"path":  "/Tags/-",
+					"value": faker.UUIDHyphenated(), // Append to tags array
 				},
 			}
 			shuffleAndFillChannel(options, c)
-		} else if (destination == "elastic") {
+		} else if destination == "elastic" {
 			options := []map[string]interface{}{{
-					"doc": map[string]interface{}{
-						faker.UUIDDigit(): faker.Email(),
-						"_ts": CurrentTimeMicros(),
-					},
+				"doc": map[string]interface{}{
+					faker.UUIDDigit(): faker.Email(),
+					"_ts":             CurrentTimeMicros(),
 				},
+			},
 				{
 					"script": map[string]interface{}{
 						"source": "ctx._source.Tags.add(params.tag)",
@@ -225,203 +225,203 @@ func RandomFieldReplace(destination string, c chan map[string]interface{}) {
 	// Purely replacement of fields
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		if (destination == "rockset") {
+		if destination == "rockset" {
 			options := []map[string]interface{}{{
 				"op":    "replace",
 				"path":  "/Email",
 				"value": faker.Email(),
 			},
-			{
-				"op":    "replace",
-				"path":  "/About",
-				"value": faker.Sentence(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Company",
-				"value": faker.Word() + "-" + faker.Word(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Name/First",
-				"value": faker.FirstName(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Name/Last",
-				"value": faker.LastName(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Age",
-				"value": random.Intn(100),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Balance",
-				"value": random.Float64(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Registered",
-				"value": faker.Timestamp(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Phone",
-				"value": faker.Phonenumber(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Picture",
-				"value": faker.UUIDDigit(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Guid",
-				"value": faker.UUIDHyphenated(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Greeting",
-				"value": faker.Paragraph(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Address/ZipCode",
-				"value": random.Intn(100000),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Address/Coordinates/Longitude",
-				"value": faker.Longitude(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Address/Coordinates/Latitude",
-				"value": faker.Latitude(),
-			},
-			{
-				"op":    "replace",
-				"path":  "/Address/City",
-				"value": faker.Word(),
-			}}
+				{
+					"op":    "replace",
+					"path":  "/About",
+					"value": faker.Sentence(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Company",
+					"value": faker.Word() + "-" + faker.Word(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Name/First",
+					"value": faker.FirstName(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Name/Last",
+					"value": faker.LastName(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Age",
+					"value": random.Intn(100),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Balance",
+					"value": random.Float64(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Registered",
+					"value": faker.Timestamp(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Phone",
+					"value": faker.Phonenumber(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Picture",
+					"value": faker.UUIDDigit(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Guid",
+					"value": faker.UUIDHyphenated(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Greeting",
+					"value": faker.Paragraph(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Address/ZipCode",
+					"value": random.Intn(100000),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Address/Coordinates/Longitude",
+					"value": faker.Longitude(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Address/Coordinates/Latitude",
+					"value": faker.Latitude(),
+				},
+				{
+					"op":    "replace",
+					"path":  "/Address/City",
+					"value": faker.Word(),
+				}}
 			shuffleAndFillChannel(options, c)
-		} else if (destination == "elastic") {
+		} else if destination == "elastic" {
 			options := []map[string]interface{}{{
 				"doc": map[string]interface{}{
 					"Email": faker.Email(),
-					"_ts": CurrentTimeMicros(),
+					"_ts":   CurrentTimeMicros(),
 				},
 			},
-			{
-				"doc": map[string]interface{}{
-					"About": faker.Sentence(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Company": faker.Word() + "-" + faker.Word(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"script": map[string]interface{}{
-					"source": "ctx._source.Name.First = params.updated_nested_first_name; ctx._source._ts = params.ts",
-					"params" : map[string]interface{}{
-						"updated_nested_first_name" : faker.FirstName(),
-						"ts": CurrentTimeMicros(),
+				{
+					"doc": map[string]interface{}{
+						"About": faker.Sentence(),
+						"_ts":   CurrentTimeMicros(),
 					},
 				},
-			},
-			{
-				"script": map[string]interface{}{
-					"source": "ctx._source.Name.Last = params.updated_nested_last_name; ctx._source._ts = params.ts",
-					"params" : map[string]interface{}{
-						"updated_nested_last_name": faker.LastName(),
-						"ts": CurrentTimeMicros(),
+				{
+					"doc": map[string]interface{}{
+						"Company": faker.Word() + "-" + faker.Word(),
+						"_ts":     CurrentTimeMicros(),
 					},
 				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Age": random.Intn(100),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Balance": random.Float64(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Registered": faker.Timestamp(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Phone": faker.Phonenumber(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Picture": faker.UUIDDigit(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Guid": faker.UUIDHyphenated(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"doc": map[string]interface{}{
-					"Greeting": faker.Paragraph(),
-					"_ts": CurrentTimeMicros(),
-				},
-			},
-			{
-				"script": map[string]interface{}{
-					"source": "ctx._source.Address.ZipCode = params.updated_nested_zcode; ctx._source._ts = params.ts",
-					"params" : map[string]interface{}{
-						"updated_nested_zcode": random.Intn(100000),
-						"ts": CurrentTimeMicros(),
+				{
+					"script": map[string]interface{}{
+						"source": "ctx._source.Name.First = params.updated_nested_first_name; ctx._source._ts = params.ts",
+						"params": map[string]interface{}{
+							"updated_nested_first_name": faker.FirstName(),
+							"ts":                        CurrentTimeMicros(),
+						},
 					},
 				},
-			},
-			{
-				"script": map[string]interface{}{
-					"source": "ctx._source.Address.Coordinates.Longitude = params.updated_nested_coord_long; ctx._source._ts = params.ts",
-					"params" : map[string]interface{}{
-						"updated_nested_coord_long": faker.Longitude(),
-						"ts": CurrentTimeMicros(),
+				{
+					"script": map[string]interface{}{
+						"source": "ctx._source.Name.Last = params.updated_nested_last_name; ctx._source._ts = params.ts",
+						"params": map[string]interface{}{
+							"updated_nested_last_name": faker.LastName(),
+							"ts":                       CurrentTimeMicros(),
+						},
 					},
 				},
-			},
-			{
-				"script": map[string]interface{}{
-					"source": "ctx._source.Address.Coordinates.Latitude = params.updated_nested_coord_lat; ctx._source._ts = params.ts",
-					"params" : map[string]interface{}{
-						"updated_nested_coord_lat": faker.Latitude(),
-						"ts": CurrentTimeMicros(),
+				{
+					"doc": map[string]interface{}{
+						"Age": random.Intn(100),
+						"_ts": CurrentTimeMicros(),
 					},
 				},
-			},
-			{
-				"script": map[string]interface{}{
-					"source": "ctx._source.Address.City = params.updated_nested_city; ctx._source._ts = params.ts",
-					"params" : map[string]interface{}{
-						"updated_nested_city": faker.Word(),
-						"ts": CurrentTimeMicros(),
+				{
+					"doc": map[string]interface{}{
+						"Balance": random.Float64(),
+						"_ts":     CurrentTimeMicros(),
 					},
 				},
-			}}
+				{
+					"doc": map[string]interface{}{
+						"Registered": faker.Timestamp(),
+						"_ts":        CurrentTimeMicros(),
+					},
+				},
+				{
+					"doc": map[string]interface{}{
+						"Phone": faker.Phonenumber(),
+						"_ts":   CurrentTimeMicros(),
+					},
+				},
+				{
+					"doc": map[string]interface{}{
+						"Picture": faker.UUIDDigit(),
+						"_ts":     CurrentTimeMicros(),
+					},
+				},
+				{
+					"doc": map[string]interface{}{
+						"Guid": faker.UUIDHyphenated(),
+						"_ts":  CurrentTimeMicros(),
+					},
+				},
+				{
+					"doc": map[string]interface{}{
+						"Greeting": faker.Paragraph(),
+						"_ts":      CurrentTimeMicros(),
+					},
+				},
+				{
+					"script": map[string]interface{}{
+						"source": "ctx._source.Address.ZipCode = params.updated_nested_zcode; ctx._source._ts = params.ts",
+						"params": map[string]interface{}{
+							"updated_nested_zcode": random.Intn(100000),
+							"ts":                   CurrentTimeMicros(),
+						},
+					},
+				},
+				{
+					"script": map[string]interface{}{
+						"source": "ctx._source.Address.Coordinates.Longitude = params.updated_nested_coord_long; ctx._source._ts = params.ts",
+						"params": map[string]interface{}{
+							"updated_nested_coord_long": faker.Longitude(),
+							"ts":                        CurrentTimeMicros(),
+						},
+					},
+				},
+				{
+					"script": map[string]interface{}{
+						"source": "ctx._source.Address.Coordinates.Latitude = params.updated_nested_coord_lat; ctx._source._ts = params.ts",
+						"params": map[string]interface{}{
+							"updated_nested_coord_lat": faker.Latitude(),
+							"ts":                       CurrentTimeMicros(),
+						},
+					},
+				},
+				{
+					"script": map[string]interface{}{
+						"source": "ctx._source.Address.City = params.updated_nested_city; ctx._source._ts = params.ts",
+						"params": map[string]interface{}{
+							"updated_nested_city": faker.Word(),
+							"ts":                  CurrentTimeMicros(),
+						},
+					},
+				}}
 			shuffleAndFillChannel(options, c)
 		}
 	}

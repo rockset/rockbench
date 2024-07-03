@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -161,10 +162,33 @@ func main() {
 		if configErr != nil {
 			log.Fatal("Unable to configure snowflake for sending documents: ", configErr)
 		}
+	case "cratedb":
+		ctx := context.Background()
+		uri := mustGetEnvString("CRATEDB_URI")
+
+		crate, err := generator.NewCrateDB(ctx, uri)
+		if err != nil {
+			log.Fatal("Unable to configure CrateDB: ", err)
+		}
+
+		err = crate.Init(ctx)
+		if err != nil {
+			log.Fatal("Unable to initialize CrateDB: ", err)
+		}
+
+		defer func() {
+			err := crate.Reset(ctx)
+			if err != nil {
+				log.Fatal("Unable to reset CrateDB: ", err)
+			}
+		}()
+
+		d = crate
+
 	case "null":
 		d = &generator.Null{}
 	default:
-		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic & Null")
+		log.Fatal("Unsupported destination. Supported options are Rockset, Elastic, CrateDB & Null")
 	}
 
 	if exportMetrics {
